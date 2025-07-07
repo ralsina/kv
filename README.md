@@ -8,6 +8,8 @@ KV is a modern, simple remote KVM solution. Minimal dependencies, easy to set up
 * Send keyboard and mouse events from a single-board computer (SBC) to the server
 * Expose disk images to the server as if they were plugged via USB thumb drives
 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/_NCVytMPW18?si=oKG_psOXdMAPj9Is" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
 ## Installation
 
 For now you need to build from source. This is a work in progress, and we will provide
@@ -24,6 +26,7 @@ To setup a KVM you need:
 
 Here's how my setup looks:
 
+![image](https://github.com/user-attachments/assets/9b67d7a3-ea71-4f2e-936f-6c4c42b25125)
 
 
 The white cable goes from the OTG port in the SBC to a regular USB port in the server.
