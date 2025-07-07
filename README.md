@@ -10,6 +10,13 @@ KV is a modern, simple remote KVM solution. Minimal dependencies, easy to set up
 
 You can see a short demo video [here](https://youtu.be/_NCVytMPW18?si=67kIt7nWbrda1uy8)
 
+## TODO
+
+* Audio streaming
+* Use ttyd to access the kvm itself
+* Performance improvements
+* Better UX for mass storage
+
 ## Installation
 
 For now you need to build from source. This is a work in progress, and we will provide
