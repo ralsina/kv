@@ -19,8 +19,9 @@ You can see a short demo video [here](https://youtu.be/_NCVytMPW18?si=67kIt7nWbr
 
 ## Installation
 
-For now you need to build from source. This is a work in progress, and we will provide
-pre-built binaries and detailed instructions soon.
+You can build from source or get the static binaries from the [releases page](https://github.com/ralsina/kv/releases)
+
+Put it somewhere, run it, look at the options.
 
 ## Usage
 
