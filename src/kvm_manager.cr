@@ -6,6 +6,48 @@ require "kemal"
 
 # Integrated KVM manager - handles video, keyboard, and mouse
 class KVMManager
+  # Track the v4l2-ctl process for cleanup
+  @v4l2ctl_process : Process? = nil
+  # Extracts and broadcasts the latest complete JPEG frame from a stream
+  private def extract_and_broadcast_jpeg_frames(io : IO)
+    read_buffer = Bytes.new(4096)
+    frame_buffer = Bytes.new(0)
+    while @video_running
+      bytes_read = io.read(read_buffer)
+      break if bytes_read == 0
+      frame_buffer += read_buffer[0, bytes_read]
+      # Extract all complete JPEG frames, but only send the latest one
+      offset = 0
+      latest_frame = nil
+      while offset < frame_buffer.size
+        # Find SOI marker
+        soi = frame_buffer.index(0xFF_u8, offset)
+        if soi && soi + 1 < frame_buffer.size && frame_buffer[soi + 1] == 0xD8_u8
+          # Found SOI, now look for EOI
+          eoi = soi + 2
+          while eoi + 1 < frame_buffer.size
+            if frame_buffer[eoi] == 0xFF_u8 && frame_buffer[eoi + 1] == 0xD9_u8
+              # Found EOI, extract frame
+              jpeg_end = eoi + 2
+              latest_frame = frame_buffer[soi, jpeg_end - soi]
+              offset = jpeg_end
+              break
+            end
+            eoi += 1
+          end
+          # If EOI not found, wait for more data
+          break if eoi + 1 >= frame_buffer.size
+        else
+          # No SOI found, discard processed bytes
+          break
+        end
+      end
+      # Remove processed bytes from frame_buffer
+      frame_buffer = frame_buffer[offset..-1] if offset > 0
+      # Only broadcast the latest complete frame (skip intermediates)
+      broadcast(latest_frame) if latest_frame
+    end
+  end
   
   Log = ::Log.for(self)
 
@@ -82,107 +124,99 @@ class KVMManager
           # Continue with ffmpeg startup
         end
 
-        command = [
-          "ffmpeg",
-          "-f", "v4l2",
-          "-input_format", "mjpeg",
-          "-video_size", "#{@width}x#{@height}",
-          "-framerate", @fps.to_s,
-          "-i", @video_device,
-          "-c:v", "mjpeg",
-          "-q:v", ((100 - @quality) / 3.125).round.to_i.to_s,
-          "-fflags", "nobuffer",
-          "-f", "mjpeg",
-          "-",
-        ]
-
+        # Try to use v4l2-ctl to stream MJPEG from the device
         begin
-          @ffmpeg_process = Process.new(
+          # Check if v4l2-ctl is already running for this device
+          existing = `pgrep -f "v4l2-ctl.*-d[ =]#{@video_device}"`.strip
+          unless existing.empty?
+            Log.warn { "Killing existing v4l2-ctl process(es) for #{@video_device}: #{existing}" }
+            existing.split.each do |pid|
+              begin
+                Process.new("kill", ["-9", pid]).wait
+                Log.info { "Killed v4l2-ctl process PID #{pid}" }
+              rescue ex
+                Log.error { "Failed to kill v4l2-ctl PID #{pid}: #{ex.message}" }
+              end
+            end
+            sleep 0.5 # Give a moment for cleanup
+          end
+          command = [
+            "v4l2-ctl",
+            "-d", @video_device,
+            "-v", "width=#{@width},height=#{@height},pixelformat=MJPG",
+            "--stream-mmap",
+            "-p", "20",
+            "--stream-to=-"
+          ]
+          Log.info { "Starting v4l2-ctl MJPEG stream: #{command.join(" ")}" }
+          process = Process.new(
             command[0], command[1..-1],
             output: Process::Redirect::Pipe,
             error: Process::Redirect::Pipe
           )
-
-          if @ffmpeg_process.nil?
-            raise "FFmpeg process could not be created."
-          else
-            process : Process = @ffmpeg_process.as(Process)
+          @v4l2ctl_process = process
+          if video_output = process.output
+            extract_and_broadcast_jpeg_frames(video_output)
           end
-          Log.debug { "FFmpeg process started with PID: #{process.pid}" }
+        rescue ex
+          Log.error { "v4l2-ctl MJPEG stream failed: #{ex.message}" }
+          Log.error { "Falling back to ffmpeg pipeline..." }
+
+          command = [
+            "ffmpeg",
+            "-f", "v4l2",
+            "-input_format", "mjpeg",
+            "-video_size", "#{@width}x#{@height}",
+            "-framerate", @fps.to_s,
+            "-i", @video_device,
+            "-c:v", "mjpeg",
+            "-q:v", ((100 - @quality) / 3.125).round.to_i.to_s,
+            "-fflags", "nobuffer",
+            "-f", "mjpeg",
+            "-",
+          ]
+
+          begin
+            @ffmpeg_process = Process.new(
+              command[0], command[1..-1],
+              output: Process::Redirect::Pipe,
+              error: Process::Redirect::Pipe
+            )
+
+            if @ffmpeg_process.nil?
+              raise "FFmpeg process could not be created."
+            else
+            ffmpeg_process : Process = @ffmpeg_process.as(Process)
+          end
+          Log.debug { "FFmpeg process started with PID: #{ffmpeg_process.pid}" }
           Log.debug { "FFmpeg command: #{command.join(" ")}" }
 
           # Read from ffmpeg's stdout and extract only the latest complete JPEG frame
-          if ffmpeg_output = process.output
-            read_buffer = Bytes.new(4096)
-            frame_buffer = Bytes.new(0)
-            while @video_running
-              bytes_read = ffmpeg_output.read(read_buffer)
-              if bytes_read == 0
-                Log.debug { "FFmpeg stdout pipe closed." }
-                break
-              end
-              # Append new data to frame_buffer
-              frame_buffer += read_buffer[0, bytes_read]
-
-              # Extract all complete JPEG frames, but only send the latest one
-              offset = 0
-              latest_frame = nil
-              while offset < frame_buffer.size
-                # Find SOI marker
-                soi = frame_buffer.index(0xFF_u8, offset)
-                if soi && soi + 1 < frame_buffer.size && frame_buffer[soi + 1] == 0xD8_u8
-                  # Found SOI, now look for EOI
-                  eoi = soi + 2
-                  while eoi + 1 < frame_buffer.size
-                    if frame_buffer[eoi] == 0xFF_u8 && frame_buffer[eoi + 1] == 0xD9_u8
-                      # Found EOI, extract frame
-                      jpeg_end = eoi + 2
-                      latest_frame = frame_buffer[soi, jpeg_end - soi]
-                      offset = jpeg_end
-                      break
-                    end
-                    eoi += 1
-                  end
-                  # If EOI not found, wait for more data
-                  if eoi + 1 >= frame_buffer.size
-                    break
-                  end
-                else
-                  # No SOI found, discard processed bytes
-                  break
-                end
-              end
-              # Remove processed bytes from frame_buffer
-              if offset > 0
-                frame_buffer = frame_buffer[offset..-1]
-              end
-              # Only broadcast the latest complete frame (skip intermediates)
-              if latest_frame
-                broadcast(latest_frame)
+          if ffmpeg_output = ffmpeg_process.output
+            extract_and_broadcast_jpeg_frames(ffmpeg_output)
+          end
+          rescue ex
+            Log.error { "FFmpeg process failed: #{ex.message}" }
+            if @ffmpeg_process
+              if error_io = @ffmpeg_process.as(Process).error
+                error_output = error_io.gets_to_end
+                Log.error { "FFmpeg stderr: #{error_output}" }
               end
             end
-          end
-        rescue ex
-          Log.error { "FFmpeg process failed: #{ex.message}" }
-          if @ffmpeg_process
-            if error_io = @ffmpeg_process.as(Process).error
-              error_output = error_io.gets_to_end
-              Log.error { "FFmpeg stderr: #{error_output}" }
+          ensure
+            # Make sure process is terminated
+            if @ffmpeg_process
+              p = @ffmpeg_process.as(Process)
+              p.signal(Signal::TERM) if p.exists?
+              p.wait
+              @ffmpeg_process = nil
             end
-          end
-        ensure
-          # Make sure process is terminated
-          if @ffmpeg_process
-            p = @ffmpeg_process.as(Process)
-            p.signal(Signal::TERM) if p.exists?
-            p.wait
-            @ffmpeg_process = nil
-          end
 
-          # If the loop is still supposed to be running, wait before restarting
-          if @video_running
-            Log.info { "FFmpeg process exited. Restarting in 2 seconds..." }
-            sleep 2.seconds
+            # If the loop is still supposed to be running, wait before restarting
+            if @video_running
+              Log.info { "FFmpeg process exited. Restarting in 2 seconds..." }
+              sleep 2.seconds
+            end
           end
         end
       end
@@ -195,10 +229,51 @@ class KVMManager
     @video_running = false
     @stop_ffmpeg.send(nil) # Blocking send to signal stop
 
-    # Terminate the process if it's running
+    # Terminate the v4l2-ctl process if it's running
+    if v4l2ctl = @v4l2ctl_process
+      begin
+        if v4l2ctl.exists?
+          v4l2ctl.signal(Signal::TERM)
+          # Wait up to 2 seconds for graceful exit
+          wait_time = 0
+          while v4l2ctl.exists? && wait_time < 20
+            sleep 0.1
+            wait_time += 1
+          end
+          if v4l2ctl.exists?
+            Log.warn { "v4l2-ctl did not exit gracefully, sending SIGKILL" }
+            v4l2ctl.signal(Signal::KILL) if v4l2ctl.exists?
+            v4l2ctl.wait
+          end
+        end
+      rescue ex
+        Log.error { "Error terminating v4l2-ctl: #{ex.message}" }
+      ensure
+        @v4l2ctl_process = nil
+      end
+    end
+
+    # Terminate the ffmpeg process if it's running
     if process = @ffmpeg_process
-      process.signal(Signal::TERM) if process.exists?
-      @ffmpeg_process = nil
+      begin
+        if process.exists?
+          process.signal(Signal::TERM)
+          wait_time = 0
+          while process.exists? && wait_time < 20
+            sleep 0.1
+            wait_time += 1
+          end
+          if process.exists?
+            Log.warn { "ffmpeg did not exit gracefully, sending SIGKILL" }
+            process.signal(Signal::KILL) if process.exists?
+            process.wait
+          end
+        end
+      rescue ex
+        Log.error { "Error terminating ffmpeg: #{ex.message}" }
+      ensure
+        @ffmpeg_process = nil
+      end
     end
 
     # Close all client channels
