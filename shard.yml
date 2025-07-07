@@ -1,0 +1,17 @@
+name: kv
+version: 0.1.0
+
+authors:
+  - your-name-here <your-email-here>
+
+targets:
+  kv:
+    main: src/main.cr
+
+crystal: '>= 1.16.3'
+
+license: MIT
+
+dependencies:
+  kemal:
+    github: kemalcr/kemal

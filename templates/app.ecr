@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+    <title>KVM Stream</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      html, body {
+        font-family: 'Oxanium', Arial, sans-serif;
+      }
+      h1, h2, h3, h4, h5, h6, header h1 {
+        font-family: 'Oxanium', Arial, sans-serif !important;
+        letter-spacing: 0.01em;
+      }
+      .material-icons {
+        font-family: 'Material Icons', sans-serif;
+        font-size: 1em !important;
+        vertical-align: middle;
+        margin-right: 0.2em;
+        line-height: 1;
+        height: 1em;
+        width: 1em;
+        display: inline-block;
+      }
+      .video-status-bar .material-icons {
+        font-size: 1.1em !important;
+      }
+    </style>
+    <style>
+        :root {
+            --sidebar-width: 320px;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--pico-card-background-color);
+            border-left: 1px solid var(--pico-card-border-color);
+            transform: translateX(0);
+            transition: transform 0.3s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar.collapsed {
+            transform: translateX(var(--sidebar-width));
+        }
+        .sidebar-content {
+            padding: 1rem;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .sidebar-toggle {
+            position: absolute;
+            top: 50%;
+            left: -2.5rem; /* Move further left */
+            transform: translateY(-50%);
+            width: 2.5rem; /* Make wider */
+            height: 5rem;  /* Make taller */
+            background: var(--pico-color-indigo-600);
+            border: 1px solid var(--pico-color-indigo-500);
+            border-right: none;
+            border-radius: var(--pico-border-radius) 0 0 var(--pico-border-radius);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--pico-color-white);
+            z-index: 1000;
+            font-size: 1.5rem; /* Larger icon */
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        }
+        #main-container {
+            flex-grow: 1;
+            transition: margin-right 0.3s ease;
+            width: 100%;
+            padding: 0.5rem;
+        }
+        body.sidebar-open #main-container {
+            margin-right: var(--sidebar-width);
+        }
+        header {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: var(--pico-border-radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .video-section {
+            margin: 0.5rem 0;
+        }
+        .video-stream {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            max-height: 80vh;
+            border-radius: var(--pico-border-radius);
+            border: 2px solid transparent;
+            transition: border-color 0.3s ease;
+            cursor: pointer;
+            object-fit: contain;
+        }
+        .video-stream:focus {
+            outline: none;
+            border-color: var(--pico-color-azure-500);
+            box-shadow: 0 0 0 3px var(--pico-color-azure-100);
+        }
+        .video-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            background: #000;
+            border-radius: var(--pico-border-radius);
+        }
+        .video-status-bar {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 0.9rem;
+            border-radius: var(--pico-border-radius) var(--pico-border-radius) 0 0;
+            margin-bottom: 0.25rem;
+        }
+        .video-status-bar > span {
+            white-space: nowrap;
+        }
+        .video-status-bar .good { color: #4ade80; }
+        .video-status-bar .warning { color: #fbbf24; }
+        .video-status-bar .bad { color: #f87171; }
+        .video-status-bar .active-input {
+            color: var(--pico-color-azure-400);
+            font-weight: bold;
+        }
+        .no-video {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--pico-muted-color);
+            background: #111;
+            border-radius: var(--pico-border-radius);
+        }
+        .video-hint {
+            text-align: center;
+            margin: 0.5rem 0;
+            font-size: 0.875rem;
+        }
+        .material-icons {
+            font-family: 'Material Icons', sans-serif;
+            font-size: 1.1em;
+            vertical-align: middle;
+            margin-right: 0.2em;
+        }
+        .key-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 0.5rem;
+        }
+        .key-grid button {
+            padding: 0.5rem;
+            margin: 0;
+            font-size: 0.875rem;
+        }
+        .combo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 0.5rem;
+        }
+        .combo-grid button {
+            padding: 0.5rem;
+            margin: 0;
+            font-size: 0.75rem;
+        }
+        .compact-section { margin-bottom: 1.5rem; }
+        .compact-section h3 {
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+            border-bottom: 1px solid var(--pico-muted-border-color);
+            padding-bottom: 0.25rem;
+        }
+        footer {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: var(--pico-border-radius);
+        }
+        @media (max-width: 768px) {
+            :root { --sidebar-width: 280px; }
+            header {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
+            }
+            .header-controls { justify-content: center; }
+            .video-stream { max-height: 70vh; }
+        }
+    </style>
+</head>
+<body>
+    <aside id="sidebar" class="sidebar collapsed">
+        <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Controls">‹</button>
+        <div class="sidebar-content">
+            <h2><span class="material-icons">tune</span> Controls</h2>
+            <!-- Text Input -->
+            <div class="compact-section">
+                <h3><span class="material-icons">text_fields</span> Text Input</h3>
+                <form id="text-input-form" style="display: flex; gap: 0.5rem;" onsubmit="event.preventDefault(); sendText();">
+                    <input type="text" id="text-input" placeholder="Type text to send..." maxlength="200">
+                    <button type="submit" style="width: auto;">Send</button>
+                </form>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="compact-section">
+                <h3><span class="material-icons">keyboard_alt</span> Quick Keys</h3>
+                <div class="key-grid">
+                    <button onclick="sendKey('enter')" class="outline">Enter</button>
+                    <button onclick="sendKey('tab')" class="outline">Tab</button>
+                    <button onclick="sendKey('escape')" class="outline">Esc</button>
+                    <button onclick="sendKey('backspace')" class="outline">⌫</button>
+                    <button onclick="sendKey('delete')" class="outline">Del</button>
+                    <button onclick="sendKey('space')" class="outline">Space</button>
+                </div>
+            </div>
+
+            <!-- Key Combinations -->
+            <div class="compact-section">
+                <h3><span class="material-icons">shortcut</span> Shortcuts</h3>
+                <div class="combo-grid">
+                    <button onclick="sendCombination(['ctrl'], ['c'])" class="outline">Ctrl+C</button>
+                    <button onclick="sendCombination(['ctrl'], ['v'])" class="outline">Ctrl+V</button>
+                    <button onclick="sendCombination(['ctrl'], ['x'])" class="outline">Ctrl+X</button>
+                    <button onclick="sendCombination(['ctrl'], ['z'])" class="outline">Ctrl+Z</button>
+                    <button onclick="sendCombination(['ctrl'], ['a'])" class="outline">Ctrl+A</button>
+                    <button onclick="sendCombination(['alt'], ['tab'])" class="outline">Alt+Tab</button>
+                </div>
+            </div>
+
+            <!-- Mouse Controls -->
+            <div class="compact-section">
+                <h3><span class="material-icons">mouse</span> Mouse Buttons</h3>
+                <div class="key-grid">
+                    <button onclick="sendMouseClick('left')" class="outline">L Click</button>
+                    <button onclick="sendMouseClick('right')" class="outline">R Click</button>
+                    <button onclick="sendMouseClick('middle')" class="outline">M Click</button>
+                </div>
+            </div>
+
+            <!-- USB Mass Storage (Disk Image Selection) -->
+            <div class="compact-section">
+                <h3><span class="material-icons">usb</span> Virtual USB Drive</h3>
+                <div id="usb-image-list" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.1); padding: 0.5rem; border-radius: var(--pico-border-radius); font-family: monospace; font-size: 0.9rem;">
+                    Loading disk images...
+                </div>
+                <div style="margin-top: 0.5rem;">
+                    <button id="detach-usb-btn" class="outline" style="display:none;"><span class="material-icons">eject</span> Detach</button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main id="main-container" class="container">
+        <!-- Header -->
+        <header>
+            <h1><span class="material-icons">desktop_windows</span> Remote KVM</h1>
+            <div class="header-controls">
+                <!-- Restart button removed -->
+            </div>
+        </header>
+
+        <!-- Video Stream -->
+        <section class="video-section">
+            <div class="video-status-bar" id="video-status-bar">
+                <span id="latency-indicator"><span class="material-icons">speed</span>--ms</span>
+                <span id="fps-indicator"><span class="material-icons">timer</span>FPS:--</span>
+                <span id="video-status"><span class="material-icons">videocam</span>Video:--</span>
+                <span id="keyboard-status"><span class="material-icons">keyboard</span>KB:✗</span>
+                <span id="mouse-status"><span class="material-icons">mouse</span>Mouse:✗</span>
+                <span id="storage-status"><span class="material-icons">usb</span>USB:✗</span>
+                <span id="input-status"></span>
+            </div>
+            <div class="video-container">
+                <img id="video-stream" class="video-stream" 
+                     alt="KVM Video Stream"
+                     tabindex="0"
+                     title="Click to capture mouse and keyboard input"
+                     onload="this.style.display='block'; document.getElementById('no-video').style.display='none';"
+                     onerror="this.style.display='none'; document.getElementById('no-video').style.display='block';"
+                     crossorigin="anonymous">
+            </div>
+            <div id="no-video" class="no-video">
+                <span class="material-icons">videocam_off</span> Video starting up...
+            </div>
+            <p class="video-hint"><small><span class="material-icons">info</span> <strong>Click on the video to capture your mouse and control the remote system directly. Press ESC to release.</strong></small></p>
+        </section>
+
+        <!-- Info -->
+        <footer>
+            <small>
+                <strong>KV:</strong> A simple and modern remote KVM
+            </small>
+        </footer>
+    </main>
+
+    <script>
+        // FPS Counter for MJPEG video stream
+        (function() {
+            let lastFrameTime = 0;
+            let frameCount = 0;
+            let fps = 0;
+            const fpsIndicator = () => document.getElementById('fps-indicator');
+            const video = document.getElementById('video-stream');
+            if (video) {
+                let lastUpdate = performance.now();
+                video.addEventListener('load', function fpsCountHandler() {
+                    // Not used: 'load' only fires once, so we use polling below
+                });
+                // Use polling to detect frame changes (for MJPEG streams)
+                let lastSrc = '';
+                setInterval(() => {
+                    if (!video.complete || video.naturalWidth === 0) return;
+                    // MJPEG: src changes with each frame (browsers reload the image)
+                    // But in this app, the src is static, so we check .currentSrc and .naturalWidth
+                    // Instead, we can use a trick: listen for the 'load' event on the <img>, but that's only once.
+                    // So, we can poll the .currentSrc and .naturalWidth, and count changes in .naturalWidth as a proxy for new frames.
+                    // Or, if the backend appends a cache-busting query param, we could check .src, but here we use .naturalWidth.
+                    let now = performance.now();
+                    if (video.naturalWidth !== 0 && video.naturalHeight !== 0) {
+                        if (lastFrameTime !== 0) {
+                            frameCount++;
+                        }
+                        lastFrameTime = now;
+                    }
+                    // Update FPS every second
+                    if (now - lastUpdate > 1000) {
+                        fps = frameCount;
+                        frameCount = 0;
+                        lastUpdate = now;
+                        if (fpsIndicator()) {
+                            fpsIndicator().innerHTML = `<span class="material-icons">timer</span>FPS:${fps}`;
+                            fpsIndicator().className = '';
+                            if (fps >= 30) fpsIndicator().classList.add('good');
+                            else if (fps >= 15) fpsIndicator().classList.add('warning');
+                            else fpsIndicator().classList.add('bad');
+                        }
+                    }
+                }, 1000/20); // Poll at 20Hz
+            }
+        })();
+        let videoFocused = false;
+        let pointerLocked = false;
+        let pressedButtons = new Set(); // Track currently pressed mouse buttons
+        
+        // restartStream removed
+
+        function initializeVideo() {
+            const video = document.getElementById('video-stream');
+            // Always set src, even if already set, to force reload
+            video.src = '/video.mjpg?' + Date.now();
+            video.style.display = 'block'; // Ensure it's visible
+        }
+
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const videoStatus = document.getElementById('video-status');
+                    const keyboardStatus = document.getElementById('keyboard-status');
+                    const mouseStatus = document.getElementById('mouse-status');
+                    const storageStatus = document.getElementById('storage-status');
+
+                    if (data.video.status === 'running') {
+                        videoStatus.innerHTML = '<span class="material-icons">videocam</span>Live (' + data.video.resolution + '@' + data.video.fps + 'fps)';
+                        videoStatus.classList.add('good');
+                    } else {
+                        videoStatus.innerHTML = '<span class="material-icons">videocam_off</span>Connecting...';
+                        videoStatus.classList.remove('good');
+                    }
+
+                    keyboardStatus.innerHTML = '<span class="material-icons">keyboard</span>' + (data.keyboard.enabled ? 'KB:✓' : 'KB:✗');
+                    keyboardStatus.classList.toggle('good', data.keyboard.enabled);
+
+                    mouseStatus.innerHTML = '<span class="material-icons">mouse</span>' + (data.mouse.enabled ? 'Mouse:✓' : 'Mouse:✗');
+                    mouseStatus.classList.toggle('good', data.mouse.enabled);
+
+                    storageStatus.innerHTML = '<span class="material-icons">usb</span>' + ((data.storage && data.storage.enabled) ? 'USB:✓' : 'USB:✗');
+                    storageStatus.classList.toggle('good', data.storage && data.storage.enabled);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('video-status').innerHTML = '<span class="material-icons">error</span> Error';
+                    document.getElementById('keyboard-status').innerHTML = '<span class="material-icons">keyboard</span>KB:✗';
+                    document.getElementById('mouse-status').innerHTML = '<span class="material-icons">mouse</span>Mouse:✗';
+                    document.getElementById('storage-status').innerHTML = '<span class="material-icons">usb</span>USB:✗';
+                });
+        }
+
+        function measureLatency() {
+            const startTime = performance.now();
+            fetch('/api/latency-test')
+                .then(response => response.json())
+                .then(data => {
+                    const endTime = performance.now();
+                    const latency = Math.round(endTime - startTime);
+                    const indicator = document.getElementById('latency-indicator');
+                    indicator.innerHTML = `<span class="material-icons">speed</span>${latency}ms`;
+                    indicator.className = 'latency-indicator';
+                    if (latency < 50) indicator.classList.add('good');
+                    else if (latency < 100) indicator.classList.add('warning');
+                    else indicator.classList.add('bad');
+                })
+                .catch(error => {
+                    document.getElementById('latency-indicator').textContent = '♾️ --ms';
+                    document.getElementById('latency-indicator').className = 'latency-indicator bad';
+                });
+        }
+
+        // --- WebSocket input client ---
+        let wsInput = null;
+        let wsInputReady = false;
+        let wsInputQueue = [];
+        function wsSendInput(obj) {
+            if (wsInputReady && wsInput && wsInput.readyState === 1) {
+                wsInput.send(JSON.stringify(obj));
+            } else {
+                wsInputQueue.push(obj);
+            }
+        }
+        function setupInputWebSocket() {
+            wsInput = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/input');
+            wsInputReady = false;
+            wsInput.onopen = function() {
+                wsInputReady = true;
+                while (wsInputQueue.length > 0) wsSendInput(wsInputQueue.shift());
+            };
+            wsInput.onclose = function() { wsInputReady = false; setTimeout(setupInputWebSocket, 1000); };
+            wsInput.onerror = function() { wsInput.close(); };
+            wsInput.onmessage = function(ev) {
+                // Optionally handle status/errors
+                // let msg = JSON.parse(ev.data);
+            };
+        }
+        setupInputWebSocket();
+
+        // Fallback for non-input endpoints (text, storage, etc)
+        function sendApiRequest(endpoint, body) {
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) console.error(`Request to ${endpoint} failed:`, data.message);
+            })
+            .catch(error => console.error(`Error sending to ${endpoint}:`, error));
+        }
+
+        // Input event senders (now use WebSocket)
+        function sendKey(key) { wsSendInput({type: 'key_press', key}); }
+        function sendCombination(modifiers, keys) { wsSendInput({type: 'key_combination', modifiers, keys}); }
+        function sendMouseClick(button) { wsSendInput({type: 'mouse_click', button}); }
+        function sendMousePress(button) {
+            pressedButtons.add(button);
+            wsSendInput({type: 'mouse_press', button});
+        }
+        function sendMouseRelease(button) {
+            pressedButtons.delete(button);
+            wsSendInput({type: 'mouse_release', button});
+        }
+        function sendMouseWheel(delta) { wsSendInput({type: 'mouse_wheel', delta}); }
+        function sendSingleMouseMove(x, y) {
+            wsSendInput({type: 'mouse_move', x, y, buttons: Array.from(pressedButtons)});
+        }
+
+        function sendText() {
+            const textInput = document.getElementById('text-input');
+            const text = textInput.value.trim();
+            if (!text) return;
+            sendApiRequest('/api/keyboard/text', {text});
+            textInput.value = '';
+        }
+
+        function keyEventToHIDKey(event) {
+            const key = event.key;
+            const keyMap = {
+                'Enter': 'enter', 'Escape': 'escape', 'Backspace': 'backspace', 'Tab': 'tab',
+                'Delete': 'delete', 'ArrowUp': 'up', 'ArrowDown': 'down', 'ArrowLeft': 'left',
+                'ArrowRight': 'right', 'Home': 'home', 'End': 'end', 'PageUp': 'pageup',
+                'PageDown': 'pagedown', 'Insert': 'insert', 'CapsLock': 'caps-lock',
+                'NumLock': 'num-lock', ' ': 'space'
+            };
+            if (key.startsWith('F') && key.length > 1 && key.length <= 3) return key.toLowerCase();
+            if (keyMap[key]) return keyMap[key];
+            if (key.length === 1) return key;
+            return null;
+        }
+
+        function getModifiers(event) {
+            const modifiers = [];
+            if (event.ctrlKey) modifiers.push('ctrl');
+            if (event.shiftKey) modifiers.push('shift');
+            if (event.altKey) modifiers.push('alt');
+            if (event.metaKey) modifiers.push('meta');
+            return modifiers;
+        }
+
+        function setupVideoCapture() {
+            const video = document.getElementById('video-stream');
+            const videoStatusBar = document.getElementById('video-status-bar');
+            const inputStatus = document.getElementById('input-status');
+
+            document.addEventListener('pointerlockchange', () => {
+                pointerLocked = (document.pointerLockElement === video);
+                videoFocused = pointerLocked;
+                videoStatusBar.classList.toggle('input-active', pointerLocked);
+                inputStatus.innerHTML = pointerLocked ? `Input Active (Shift+ESC to release)` : '';
+                if (!pointerLocked) {
+                    pressedButtons.forEach(button => sendMouseRelease(button));
+                }
+            });
+
+            video.addEventListener('focus', () => {
+                if (!pointerLocked) {
+                    videoFocused = true;
+                    videoStatusBar.classList.add('input-active');
+                    inputStatus.innerHTML = `Input Active`;
+                }
+            });
+            video.addEventListener('blur', () => {
+                if (!pointerLocked) {
+                    videoFocused = false;
+                    videoStatusBar.classList.remove('input-active');
+                    inputStatus.textContent = '';
+                }
+            });
+            video.addEventListener('click', (e) => { e.preventDefault(); video.requestPointerLock(); });
+            video.addEventListener('mousemove', (e) => {
+                if (pointerLocked) sendSingleMouseMove(e.movementX, e.movementY);
+            });
+            video.addEventListener('mousedown', (e) => {
+                if (!videoFocused) return;
+                e.preventDefault();
+                const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
+                sendMousePress(button);
+            });
+            video.addEventListener('mouseup', (e) => {
+                if (!videoFocused) return;
+                e.preventDefault();
+                const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
+                sendMouseRelease(button);
+            });
+            video.addEventListener('keydown', (e) => {
+                if (!videoFocused) return;
+                // Release pointer lock on Shift+Escape
+                if (e.key === 'Escape' && e.shiftKey && pointerLocked) {
+                    document.exitPointerLock();
+                    e.preventDefault();
+                    return;
+                }
+                // Prevent single Escape from releasing pointer lock
+                if (e.key === 'Escape' && pointerLocked) {
+                    // Do not release pointer lock, but allow Escape to be sent
+                    // But we must preventDefault to stop browser from exiting pointer lock
+                    e.preventDefault();
+                }
+                const hidKey = keyEventToHIDKey(e);
+                if (hidKey) {
+                    const modifiers = getModifiers(e);
+                    sendCombination(modifiers, [hidKey]);
+                }
+            });
+            video.addEventListener('wheel', (e) => {
+                if (!videoFocused) return;
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -1 : 1;
+                sendMouseWheel(delta);
+            });
+            video.addEventListener('contextmenu', (e) => e.preventDefault());
+            video.addEventListener('paste', (e) => {
+                if (!videoFocused) return;
+                e.preventDefault();
+                const text = e.clipboardData.getData('text');
+                if (text) sendApiRequest('/api/keyboard/text', {text});
+            });
+        }
+
+        document.getElementById('text-input').addEventListener('focus', () => document.getElementById('video-stream').blur());
+
+
+        // USB Mass Storage (Disk Image Selection)
+        function refreshUsbImages() {
+            fetch('/api/storage/images')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('usb-image-list');
+                    const detachBtn = document.getElementById('detach-usb-btn');
+                    if (data.success && data.images) {
+                        if (data.images.length === 0) {
+                            container.innerHTML = '<em>No disk images found in ./disk-images</em>';
+                            detachBtn.style.display = 'none';
+                        } else {
+                            container.innerHTML = data.images.map(img => {
+                                const selected = (img === data.selected) ? ' (selected)' : '';
+                                return `<div style=\"padding:2px 0;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${img===data.selected?'font-weight:bold;color:#4ade80;':''}\" onclick=\"selectUsbImage('${img}')\" title=\"${img}\">${img}${selected}</div>`;
+                            }).join('');
+                            detachBtn.style.display = data.selected ? '' : 'none';
+                        }
+                    } else {
+                        container.innerHTML = '<em>Error loading disk images</em>';
+                        detachBtn.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('usb-image-list').innerHTML = '<em>Error loading disk images</em>';
+                    document.getElementById('detach-usb-btn').style.display = 'none';
+                });
+        }
+
+        function selectUsbImage(image) {
+            fetch('/api/storage/select', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({image})
+            })
+            .then(() => { setTimeout(() => { refreshUsbImages(); updateStatus(); }, 300); })
+            .catch(() => { refreshUsbImages(); });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // ...existing code...
+            refreshUsbImages();
+            document.getElementById('detach-usb-btn').onclick = function() {
+                fetch('/api/storage/select', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({image: null})
+                }).then(() => { setTimeout(() => { refreshUsbImages(); updateStatus(); }, 300); });
+            };
+        });
+
+        // Sidebar Toggle
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        sidebarToggle.addEventListener('click', () => {
+            const isCollapsed = sidebar.classList.toggle('collapsed');
+            document.body.classList.toggle('sidebar-open', !isCollapsed);
+            sidebarToggle.innerHTML = isCollapsed ? '‹' : '›';
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeVideo();
+            updateStatus();
+            measureLatency();
+            refreshUsbImages();
+            setInterval(updateStatus, 5000);
+            setInterval(measureLatency, 3000);
+            setupVideoCapture();
+        });
+    </script>
+</body>
+</html>
