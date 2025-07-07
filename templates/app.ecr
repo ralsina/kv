@@ -542,7 +542,7 @@
                 pointerLocked = (document.pointerLockElement === video);
                 videoFocused = pointerLocked;
                 videoStatusBar.classList.toggle('input-active', pointerLocked);
-                inputStatus.innerHTML = pointerLocked ? `Input Active (Shift+ESC to release)` : '';
+                inputStatus.innerHTML = pointerLocked ? `Input Active (ESC to release)` : '';
                 if (!pointerLocked) {
                     pressedButtons.forEach(button => sendMouseRelease(button));
                 }
@@ -580,18 +580,6 @@
             });
             video.addEventListener('keydown', (e) => {
                 if (!videoFocused) return;
-                // Release pointer lock on Shift+Escape
-                if (e.key === 'Escape' && e.shiftKey && pointerLocked) {
-                    document.exitPointerLock();
-                    e.preventDefault();
-                    return;
-                }
-                // Prevent single Escape from releasing pointer lock
-                if (e.key === 'Escape' && pointerLocked) {
-                    // Do not release pointer lock, but allow Escape to be sent
-                    // But we must preventDefault to stop browser from exiting pointer lock
-                    e.preventDefault();
-                }
                 const hidKey = keyEventToHIDKey(e);
                 if (hidKey) {
                     const modifiers = getModifiers(e);
