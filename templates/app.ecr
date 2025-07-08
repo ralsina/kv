@@ -580,8 +580,10 @@
             });
             video.addEventListener('keydown', (e) => {
                 if (!videoFocused) return;
+                // Always prevent browser shortcuts when video is focused and a key is sent to the server
                 const hidKey = keyEventToHIDKey(e);
                 if (hidKey) {
+                    e.preventDefault();
                     const modifiers = getModifiers(e);
                     sendCombination(modifiers, [hidKey]);
                 }
