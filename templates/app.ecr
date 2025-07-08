@@ -36,7 +36,9 @@
         body {
             margin: 0;
             padding: 0;
+            height: 100vh;
             display: flex;
+            flex-direction: column;
         }
         .sidebar {
             position: fixed;
@@ -95,6 +97,10 @@
             flex-grow: 1;
             width: 100%;
             padding: 0.5rem;
+            padding-top: calc(0.5rem + 2.5rem); /* Add top padding for fixed status bar */
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Allow flex shrinking */
             /* Remove transition and margin changes - sidebar now overlays */
         }
         header {
@@ -119,12 +125,16 @@
         }
         .video-section {
             margin: 0.5rem 0;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Allow flex shrinking */
         }
         .video-stream {
             width: 100%;
             max-width: 100%;
-            height: auto;
-            max-height: 80vh;
+            height: 100%;
+            max-height: 100%;
             border-radius: var(--pico-border-radius);
             border: 2px solid transparent;
             transition: border-color 0.3s ease;
@@ -143,18 +153,25 @@
             width: 100%;
             background: #000;
             border-radius: var(--pico-border-radius);
+            flex-grow: 1;
+            min-height: 0; /* Allow flex shrinking */
+            margin-top: 0; /* Remove top margin since status bar is now fixed */
         }
         .video-status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
             display: flex;
             justify-content: flex-start;
             align-items: center;
             gap: 1rem;
             padding: 0.25rem 0.75rem;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.8);
             color: white;
             font-size: 0.9rem;
-            border-radius: var(--pico-border-radius) var(--pico-border-radius) 0 0;
-            margin-bottom: 0.25rem;
+            z-index: 999; /* Below sidebar but above content */
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
         .video-status-bar > span {
             white-space: nowrap;
@@ -212,12 +229,13 @@
             padding-bottom: 0.25rem;
         }
         footer {
-            margin-top: 1rem;
+            margin-top: auto; /* Push footer to bottom */
             padding: 0.5rem;
             font-size: 0.75rem;
             text-align: center;
             background: rgba(0, 0, 0, 0.1);
             border-radius: var(--pico-border-radius);
+            flex-shrink: 0; /* Prevent footer from shrinking */
         }
         @media (max-width: 768px) {
             :root { --sidebar-width: 280px; }
@@ -330,13 +348,12 @@
             <div id="no-video" class="no-video">
                 <span class="material-icons">videocam_off</span> Video starting up...
             </div>
-            <p class="video-hint"><small><span class="material-icons">info</span> <strong>Click on the video to capture your mouse and control the remote system directly. Press ESC to release.</strong></small></p>
         </section>
 
         <!-- Info -->
         <footer>
             <small>
-                <strong>KV:</strong> A simple and modern remote KVM
+                <strong>KV:</strong> A remote KVM | <a href="https://github.com/ralsina/kv" target="_blank" rel="noopener noreferrer" style="color: var(--pico-color-azure-400); text-decoration: none;">Source Code</a>
             </small>
         </footer>
     </main>
