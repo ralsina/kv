@@ -6,7 +6,6 @@ require "kemal"
 
 # Integrated KVM manager - handles video, keyboard, and mouse
 class KVMManager
-  
   Log = ::Log.for(self)
 
   @video_running = false
@@ -223,14 +222,12 @@ class KVMManager
   end
 
   def send_keys(keys : Array(String), modifiers : Array(String) = [] of String)
-    begin
-      report = HIDKeyboard.create_keyboard_report(keys, modifiers)
-      HIDKeyboard.send_keyboard_report(@keyboard_device.to_s, report)
-      {success: true, message: "Keys sent: #{keys.join("+")}"}
-    rescue ex
-      Log.error { "Failed to send keys: #{ex.message}" }
-      {success: false, message: "Error sending keys: #{ex.message}"}
-    end
+    report = HIDKeyboard.create_keyboard_report(keys, modifiers)
+    HIDKeyboard.send_keyboard_report(@keyboard_device.to_s, report)
+    {success: true, message: "Keys sent: #{keys.join("+")}"}
+  rescue ex
+    Log.error { "Failed to send keys: #{ex.message}" }
+    {success: false, message: "Error sending keys: #{ex.message}"}
   end
 
   def send_text(text : String)
@@ -387,9 +384,6 @@ class KVMManager
       storage:  storage_status,
     }
   end
-
-
-
 
   # Register a new client to receive video stream data
   def register_client(client_channel : Channel(Bytes))

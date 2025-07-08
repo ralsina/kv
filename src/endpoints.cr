@@ -5,7 +5,6 @@ require "./kvm_manager"
 
 # Global KVM manager module
 module GlobalKVM
-
   Log = ::Log.for(self)
 
   @@manager : KVMManager?
@@ -510,7 +509,6 @@ ws "/ws/input" do |socket|
     Log.debug { "WebSocket client disconnected" }
   end
 end
-
 
 # Mass storage API (new model)
 get "/api/storage/images" do |env|

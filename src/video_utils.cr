@@ -3,6 +3,7 @@ require "process"
 # Video device detection and validation utilities
 module VideoUtils
   Log = ::Log.for(self)
+
   struct VideoDevice
     property device : String
     property name : String

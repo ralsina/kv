@@ -1,4 +1,3 @@
-
 require "log"
 require "kemal"
 require "option_parser"

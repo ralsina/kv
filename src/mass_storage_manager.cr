@@ -6,7 +6,7 @@ class MassStorageManager
 
   # List available disk images in ./disk-images
   def available_images
-    Dir.glob("./disk-images/*").select { |f| File.file?(f) }
+    Dir.glob("./disk-images/*").select { |fname| File.file?(fname) }
   end
 
   # Attach a disk image as the USB mass storage device
@@ -27,12 +27,10 @@ class MassStorageManager
   # Status for API
   def status
     {
-      selected_image: @selected_image,
-      available_images: available_images
+      selected_image:   @selected_image,
+      available_images: available_images,
     }
   end
-
-
 
   def cleanup
     @selected_image = nil

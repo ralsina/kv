@@ -153,8 +153,8 @@ module HIDComposite
               File.write(udc_file, "")
               Log.debug { "UDC unbound before mass storage config" }
               sleep 0.2.seconds
-            rescue ex2
-              Log.debug { "Could not unbind UDC: #{ex2.message}" }
+            rescue error
+              Log.debug { "Could not unbind UDC: #{error.message}" }
             end
           end
 
@@ -164,8 +164,8 @@ module HIDComposite
               File.write(file_file, "")
               Log.debug { "Cleared LUN file before config" }
               sleep 0.2.seconds
-            rescue ex2
-              Log.debug { "Could not clear LUN file before config: #{ex2.message}" }
+            rescue error
+              Log.debug { "Could not clear LUN file before config: #{error.message}" }
             end
           end
 
@@ -175,8 +175,8 @@ module HIDComposite
               File.write(ro_file, "1")
               Log.debug { "Set ro=1 before config" }
               sleep 0.2.seconds
-            rescue ex2
-              Log.debug { "Could not set ro=1 before config: #{ex2.message}" }
+            rescue error
+              Log.debug { "Could not set ro=1 before config: #{error.message}" }
             end
           end
 
@@ -194,8 +194,8 @@ module HIDComposite
               File.write(ro_file, "0")
               Log.debug { "Set ro=0 after config" }
               sleep 0.2.seconds
-            rescue ex2
-              Log.debug { "Could not set ro=0 after config: #{ex2.message}" }
+            rescue error
+              Log.debug { "Could not set ro=0 after config: #{error.message}" }
             end
           end
 
@@ -212,8 +212,8 @@ module HIDComposite
                 File.write(udc_file, first_udc)
                 Log.debug { "UDC rebound after mass storage config: #{first_udc}" }
                 sleep 0.2.seconds
-              rescue ex2
-                Log.debug { "Could not rebind UDC: #{ex2.message}" }
+              rescue error
+                Log.debug { "Could not rebind UDC: #{error.message}" }
               end
             end
           end
@@ -320,8 +320,6 @@ module HIDComposite
     raise ex
   end
 
-
-
   def self.cleanup_all_gadgets
     # Clean up any existing gadgets in the system
     gadget_base = "/sys/kernel/config/usb_gadget"
@@ -344,8 +342,6 @@ module HIDComposite
   private def self.cleanup_existing_gadget(base : String)
     # Clean up any existing gadget
     Log.debug { "Cleaning up existing gadget at #{base}" }
-
-
 
     # Step 1: Aggressive kernel workaround for mass storage LUN
     ro_file = "#{base}/functions/mass_storage.0/lun.0/ro"
@@ -395,11 +391,11 @@ module HIDComposite
     ["hid.keyboard", "hid.mouse", "hid.usb0", "hid.usb1", "mass_storage.0"].each do |function_name|
       symlink_path = "#{base}/configs/c.1/#{function_name}"
       if File.exists?(symlink_path) || File.symlink?(symlink_path)
-    Log.debug { "Removing symlink: #{symlink_path}" }
+        Log.debug { "Removing symlink: #{symlink_path}" }
         begin
           File.delete(symlink_path)
         rescue ex
-        Log.debug { "Failed to remove symlink: #{ex.message}" }
+          Log.debug { "Failed to remove symlink: #{ex.message}" }
         end
       end
     end
