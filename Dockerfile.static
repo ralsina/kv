@@ -1,0 +1,18 @@
+FROM --platform=${TARGETPLATFORM:-linux/amd64} alpine:edge AS build
+RUN apk add --no-cache \
+    crystal \
+    shards \
+    gc-dev \
+    gc-static \
+    pcre2-dev \
+    pcre2-static \
+    yaml-dev \
+    yaml-static \
+    openssl-dev \
+    openssl-libs-static \
+    libxml2-dev \
+    libxml2-static \
+    zlib-dev \
+    zlib-static \
+    xz-dev \
+    xz-static
