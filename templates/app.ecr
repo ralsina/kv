@@ -236,6 +236,9 @@
                     <input type="text" id="text-input" placeholder="Type text to send..." maxlength="200">
                     <button type="submit" style="width: auto;">Send</button>
                 </form>
+                <div style="margin-top: 0.5rem;">
+                    <button onclick="pasteFromClipboard()" class="outline" style="width: 100%;"><span class="material-icons">content_paste</span> Paste Clipboard</button>
+                </div>
             </div>
 
             <!-- Quick Actions -->
@@ -261,6 +264,7 @@
                     <button onclick="sendCombination(['ctrl'], ['z'])" class="outline">Ctrl+Z</button>
                     <button onclick="sendCombination(['ctrl'], ['a'])" class="outline">Ctrl+A</button>
                     <button onclick="sendCombination(['alt'], ['tab'])" class="outline">Alt+Tab</button>
+                    <button onclick="pasteFromClipboard()" class="outline" title="Paste from your clipboard"><span class="material-icons" style="font-size: 0.8em;">content_paste</span> Paste</button>
                 </div>
             </div>
 
@@ -509,6 +513,23 @@
             textInput.value = '';
         }
 
+        async function pasteFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                    sendApiRequest('/api/keyboard/text', {text});
+                    console.log('Pasted text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+                }
+            } catch (err) {
+                console.error('Failed to read clipboard:', err);
+                // Fallback: show a prompt for manual paste
+                const text = prompt('Paste your text here (automatic clipboard access not available):');
+                if (text) {
+                    sendApiRequest('/api/keyboard/text', {text});
+                }
+            }
+        }
+
         function keyEventToHIDKey(event) {
             const key = event.key;
             const keyMap = {
@@ -604,6 +625,15 @@
         }
 
         document.getElementById('text-input').addEventListener('focus', () => document.getElementById('video-stream').blur());
+
+        // Global keyboard shortcuts for pasting
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+Shift+V for paste (when not in video focus)
+            if (e.ctrlKey && e.shiftKey && e.key === 'V' && !videoFocused) {
+                e.preventDefault();
+                pasteFromClipboard();
+            }
+        });
 
 
         // USB Mass Storage (Disk Image Selection)
