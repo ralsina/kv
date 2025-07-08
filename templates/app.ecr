@@ -44,13 +44,16 @@
             right: 0;
             width: var(--sidebar-width);
             height: 100vh;
-            background: var(--pico-card-background-color);
-            border-left: 1px solid var(--pico-card-border-color);
+            background: rgba(18, 18, 20, 0.8); /* Dark translucent background */
+            backdrop-filter: blur(12px); /* Add blur effect for modern look */
+            -webkit-backdrop-filter: blur(12px); /* Safari support */
+            border-left: 1px solid rgba(64, 64, 64, 0.6); /* Semi-transparent border */
             transform: translateX(0);
             transition: transform 0.3s ease;
             z-index: 1001;
             display: flex;
             flex-direction: column;
+            box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4); /* Add shadow for depth */
         }
         .sidebar.collapsed {
             transform: translateX(var(--sidebar-width));
@@ -62,13 +65,13 @@
         }
         .sidebar-toggle {
             position: absolute;
-            top: 50%;
-            left: -2.5rem; /* Move further left */
-            transform: translateY(-50%);
-            width: 2.5rem; /* Make wider */
-            height: 5rem;  /* Make taller */
+            top: 1rem; /* Move to top */
+            left: -3rem; /* Move further left for better visibility */
+            transform: none; /* Remove center transform */
+            width: 3rem; /* Make wider for better visibility */
+            height: 3rem; /* Square shape */
             background: var(--pico-color-indigo-600);
-            border: 1px solid var(--pico-color-indigo-500);
+            border: 2px solid var(--pico-color-indigo-400); /* Thicker border */
             border-right: none;
             border-radius: var(--pico-border-radius) 0 0 var(--pico-border-radius);
             cursor: pointer;
@@ -77,18 +80,22 @@
             justify-content: center;
             color: var(--pico-color-white);
             z-index: 1000;
-            font-size: 1.5rem; /* Larger icon */
-            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+            font-size: 1.8rem; /* Larger icon */
+            font-weight: bold; /* Make icon bolder */
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            box-shadow: -4px 0 8px rgba(0,0,0,0.2); /* Stronger shadow */
+            transition: all 0.2s ease; /* Smooth hover effect */
+        }
+        .sidebar-toggle:hover {
+            background: var(--pico-color-indigo-500);
+            transform: translateX(-2px); /* Slide out slightly on hover */
+            box-shadow: -6px 0 12px rgba(0,0,0,0.3);
         }
         #main-container {
             flex-grow: 1;
-            transition: margin-right 0.3s ease;
             width: 100%;
             padding: 0.5rem;
-        }
-        body.sidebar-open #main-container {
-            margin-right: var(--sidebar-width);
+            /* Remove transition and margin changes - sidebar now overlays */
         }
         header {
             margin-bottom: 0.5rem;
@@ -687,17 +694,52 @@
             };
         });
 
-        // Sidebar Toggle
+        // Sidebar Toggle with Local Storage
         const sidebar = document.getElementById('sidebar');
         const sidebarToggle = document.getElementById('sidebar-toggle');
+        
+        // Load sidebar state from localStorage
+        function loadSidebarState() {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed) {
+                sidebar.classList.add('collapsed');
+                sidebarToggle.innerHTML = '‹';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebarToggle.innerHTML = '›';
+            }
+            // Remove body class management since sidebar now overlays
+        }
+        
+        // Save sidebar state to localStorage
+        function saveSidebarState(isCollapsed) {
+            localStorage.setItem('sidebarCollapsed', isCollapsed.toString());
+        }
+        
         sidebarToggle.addEventListener('click', () => {
             const isCollapsed = sidebar.classList.toggle('collapsed');
-            document.body.classList.toggle('sidebar-open', !isCollapsed);
             sidebarToggle.innerHTML = isCollapsed ? '‹' : '›';
+            saveSidebarState(isCollapsed);
+            // Remove body class management since sidebar now overlays
+        });
+
+        // Close sidebar when clicking outside of it
+        document.addEventListener('click', (e) => {
+            // Don't close if clicking on the sidebar itself or the toggle button
+            if (!sidebar.contains(e.target) && e.target !== sidebarToggle) {
+                // Only close if sidebar is currently open
+                if (!sidebar.classList.contains('collapsed')) {
+                    sidebar.classList.add('collapsed');
+                    sidebarToggle.innerHTML = '‹';
+                    saveSidebarState(true); // Save the collapsed state
+                    // Remove body class management since sidebar now overlays
+                }
+            }
         });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            loadSidebarState(); // Load sidebar state first
             initializeVideo();
             updateStatus();
             measureLatency();
