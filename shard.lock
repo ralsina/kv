@@ -16,3 +16,7 @@ shards:
     git: https://github.com/luislavena/radix.git
     version: 0.4.1
 
+  v4cr:
+    git: https://github.com/ralsina/v4cr.git
+    version: 0.1.0+git.commit.61ad7e4bd19376ac9edaf29668cb3e6d4b952587
+

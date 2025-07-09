@@ -1,142 +1,149 @@
-require "process"
+require "v4cr"
 
-# Video device detection and validation utilities
-module VideoUtils
+# V4cr-based video device detection utilities
+module V4crVideoUtils
   Log = ::Log.for(self)
 
-  struct VideoDevice
+  struct V4crVideoDevice
     property device : String
     property name : String
+    property driver : String
+    property card : String
     property formats : Array(String)
     property resolutions : Array(String)
     property max_fps : Int32
+    property? supports_mjpeg : Bool
 
-    def initialize(@device : String, @name : String = "", @formats = [] of String, @resolutions = [] of String, @max_fps = 0)
+    def initialize(@device : String, @name : String = "", @driver : String = "",
+                   @card : String = "", @formats = [] of String,
+                   @resolutions = [] of String, @max_fps = 0, @supports_mjpeg = false)
     end
 
-    def supports_mjpeg?
-      formats.any? { |format| format.upcase.includes?("MJPG") || format.upcase.includes?("MJPEG") }
-    end
-
-    def supports_resolution?(width : Int32, height : Int32)
+    def supports_resolution?(width : UInt32, height : UInt32)
       target = "#{width}x#{height}"
       resolutions.any? { |res| res == target }
     end
 
     def to_s(io)
-      io << "#{device} (#{name})"
+      io << "#{device} (#{card})"
       io << " - MJPEG: #{supports_mjpeg? ? "✅" : "❌"}"
+      io << " - Formats: #{formats.join(", ")}"
       io << " - Max FPS: #{max_fps}"
     end
   end
 
-  # Detect all available video capture devices
-  def self.detect_video_devices : Array(VideoDevice)
-    devices = [] of VideoDevice
+  # Detect all available V4L2 video capture devices using V4cr
+  def self.detect_video_devices : Array(V4crVideoDevice)
+    devices = [] of V4crVideoDevice
 
     # Find all video devices
-    Dir.glob("/dev/video*").sort.each do |device_path|
+    0.upto(9) do |i|
+      device_path = "/dev/video#{i}"
       next unless File.exists?(device_path)
 
       device = detect_device_info(device_path)
-      if device && device.formats.size > 0
+      if device
         devices << device
+        Log.debug { "Found device: #{device}" }
       end
     end
 
     devices
   end
 
-  # Get detailed information about a specific video device
-  private def self.detect_device_info(device_path : String) : VideoDevice?
-    # Check if device supports video capture inputs
-    inputs_output = IO::Memory.new
-    inputs_error = IO::Memory.new
-    inputs_result = Process.run("v4l2-ctl", ["--device=#{device_path}", "--list-inputs"],
-      output: inputs_output, error: inputs_error)
+  # Get detailed information about a specific video device using V4cr
+  private def self.detect_device_info(device_path : String) : V4crVideoDevice?
+    device = V4cr::Device.new(device_path)
+    device.open
 
-    unless inputs_result.success?
-      Log.debug { "#{device_path}: Not a capture device" }
+    # Check if device supports video capture
+    capability = device.query_capability
+    unless capability.video_capture?
+      Log.debug { "#{device_path}: Not a video capture device" }
+      device.close
       return nil
     end
 
-    # Get device name
-    name = get_device_name(device_path)
+    # Get device information
+    card = capability.card
+    driver = capability.driver
 
-    # Get supported formats and resolutions
-    formats_output = IO::Memory.new
-    formats_error = IO::Memory.new
-    formats_result = Process.run("v4l2-ctl", ["--device=#{device_path}", "--list-formats-ext"],
-      output: formats_output, error: formats_error)
-
-    unless formats_result.success?
-      Log.debug { "#{device_path}: Failed to get formats" }
-      return nil
-    end
-
-    formats, resolutions, max_fps = parse_formats_output(formats_output.to_s)
-
-    if formats.empty?
-      Log.debug { "#{device_path}: No supported formats found" }
-      return nil
-    end
-
-    VideoDevice.new(device_path, name, formats, resolutions, max_fps)
-  end
-
-  # Get the device name/description
-  private def self.get_device_name(device_path : String) : String
-    output = IO::Memory.new
-    error = IO::Memory.new
-    result = Process.run("v4l2-ctl", ["--device=#{device_path}", "--info"],
-      output: output, error: error)
-
-    if result.success?
-      output.to_s.each_line do |line|
-        if line.includes?("Card type")
-          return line.split(":")[1]?.try(&.strip) || "Unknown"
-        end
-      end
-    end
-
-    "Unknown Device"
-  end
-
-  # Parse the output of v4l2-ctl --list-formats-ext
-  private def self.parse_formats_output(output : String) : {Array(String), Array(String), Int32}
+    # Get supported formats
     formats = [] of String
     resolutions = [] of String
     max_fps = 0
+    supports_mjpeg = false
 
-    current_format = ""
+    # Try to enumerate formats (this might not work on all devices)
+    begin
+      # Try some common MJPEG resolutions to see what works
+      test_resolutions = [
+        {320_u32, 240_u32},
+        {640_u32, 480_u32},
+        {800_u32, 600_u32},
+        {1024_u32, 768_u32},
+        {1280_u32, 720_u32},
+        {1920_u32, 1080_u32},
+      ]
 
-    output.each_line do |line|
-      line = line.strip
+      test_resolutions.each do |width, height|
+        begin
+          # Try to set MJPEG format
+          device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPEG)
+          supports_mjpeg = true
+          formats << "MJPEG" unless formats.includes?("MJPEG")
+          resolutions << "#{width}x#{height}" unless resolutions.includes?("#{width}x#{height}")
 
-      # Format line: [0]: 'MJPG' (Motion-JPEG, compressed)
-      if match = line.match(/\[(\d+)\]:\s+'([^']+)'\s+\(([^)]+)\)/)
-        current_format = match[2]
-        formats << current_format unless formats.includes?(current_format)
+          # Try to get frame rate (simplified - assumes 30fps for now)
+          max_fps = 30 if max_fps < 30
+        rescue
+          # This resolution/format combination doesn't work
+        end
       end
 
-      # Size line: Size: Discrete 1920x1080
-      if match = line.match(/Size: Discrete (\d+x\d+)/)
-        resolution = match[1]
-        resolutions << resolution unless resolutions.includes?(resolution)
+      # Try other common formats if MJPEG doesn't work
+      unless supports_mjpeg
+        test_resolutions.each do |width, height|
+          begin
+            # Try YUYV format
+            device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_YUYV)
+            formats << "YUYV" unless formats.includes?("YUYV")
+            resolutions << "#{width}x#{height}" unless resolutions.includes?("#{width}x#{height}")
+            max_fps = 30 if max_fps < 30
+          rescue
+            # This format doesn't work either
+          end
+        end
       end
-
-      # Interval line: Interval: Discrete 0.033s (30.000 fps)
-      if match = line.match(/Interval: Discrete [0-9.]+s \(([0-9.]+) fps\)/)
-        fps = match[1].to_f.to_i
-        max_fps = fps if fps > max_fps
-      end
+    rescue e
+      Log.debug { "#{device_path}: Error enumerating formats: #{e.message}" }
     end
 
-    {formats, resolutions.uniq.sort!, max_fps}
+    device.close
+
+    # Only return devices that support at least one format
+    if formats.size > 0
+      V4crVideoDevice.new(
+        device: device_path,
+        name: card,
+        driver: driver,
+        card: card,
+        formats: formats,
+        resolutions: resolutions.uniq.sort!,
+        max_fps: max_fps,
+        supports_mjpeg: supports_mjpeg
+      )
+    else
+      Log.debug { "#{device_path}: No supported formats found" }
+      nil
+    end
+  rescue e
+    Log.debug { "#{device_path}: Error accessing device: #{e.message}" }
+    nil
   end
 
   # Find the best video device for capture
-  def self.find_best_capture_device(preferred_width : Int32 = 1920, preferred_height : Int32 = 1080) : VideoDevice?
+  def self.find_best_capture_device(preferred_width : UInt32 = 1920_u32, preferred_height : UInt32 = 1080_u32) : V4crVideoDevice?
     devices = detect_video_devices
 
     if devices.empty?
@@ -148,13 +155,13 @@ module VideoUtils
     devices.each_with_index do |device, index|
       Log.info { "  #{index + 1}. #{device}" }
     end
-    Log.info { "" }
 
-    # Prefer devices that support MJPEG and the target resolution
+    # Prefer devices that support MJPEG
     mjpeg_devices = devices.select(&.supports_mjpeg?)
 
     if mjpeg_devices.empty?
       Log.warn { "No devices support MJPEG - using first available device" }
+      Log.warn { "Note: This may result in poor streaming performance" }
       return devices.first
     end
 
@@ -172,44 +179,49 @@ module VideoUtils
     best_device
   end
 
-  # Validate that a specific device can capture video
-  def self.validate_device(device_path : String, width : Int32, height : Int32, fps : Int32) : Bool
+  # Validate that a specific device can capture video using V4cr
+  def self.validate_device(device_path : String, width : UInt32, height : UInt32, fps : Int32) : Bool
     unless File.exists?(device_path)
       Log.error { "Video device #{device_path} does not exist" }
       return false
     end
 
-    device = detect_device_info(device_path)
-    unless device
+    device_info = detect_device_info(device_path)
+    unless device_info
       Log.error { "#{device_path} is not a valid video capture device" }
       return false
     end
 
-    unless device.supports_mjpeg?
+    unless device_info.supports_mjpeg?
       Log.warn { "#{device_path} does not support MJPEG format" }
+      Log.warn { "Available formats: #{device_info.formats.join(", ")}" }
     end
 
-    unless device.supports_resolution?(width, height)
+    unless device_info.supports_resolution?(width, height)
       Log.warn { "#{device_path} does not support #{width}x#{height} resolution" }
-      Log.warn { "    Available resolutions: #{device.resolutions.join(", ")}" }
+      Log.warn { "Available resolutions: #{device_info.resolutions.join(", ")}" }
     end
 
-    if fps > device.max_fps
-      Log.warn { "#{device_path} max FPS is #{device.max_fps}, requested #{fps}" }
+    if fps > device_info.max_fps
+      Log.warn { "#{device_path} max FPS is #{device_info.max_fps}, requested #{fps}" }
     end
 
-    # Test if we can actually open the device with FFmpeg
-    output = IO::Memory.new
-    error = IO::Memory.new
-    test_result = Process.run("timeout", ["5", "ffmpeg", "-f", "v4l2", "-i", device_path, "-frames:v", "1", "-f", "null", "-"],
-      output: output, error: error)
+    # Test if we can actually open and configure the device
+    begin
+      test_device = V4cr::Device.new(device_path)
+      test_device.open
 
-    if test_result.success?
-      Log.info { "#{device_path} FFmpeg test passed" }
+      # Try to set the requested format
+      test_device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPEG)
+
+      # Try to request buffers (this will fail if device is busy)
+      test_device.request_buffers(2)
+
+      test_device.close
+      Log.info { "#{device_path} V4cr validation passed" }
       true
-    else
-      Log.error { "#{device_path} FFmpeg test failed:" }
-      Log.error { "   #{error.to_s.lines.last?}" }
+    rescue e
+      Log.error { "#{device_path} V4cr validation failed: #{e.message}" }
       false
     end
   end

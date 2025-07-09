@@ -171,6 +171,9 @@
         .video-container:hover .video-controls {
             opacity: 1;
         }
+        .video-container.pointer-locked .video-controls {
+            display: none !important;
+        }
         .video-control-btn {
             background: rgba(0, 0, 0, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -688,6 +691,15 @@
                 videoFocused = pointerLocked;
                 videoStatusBar.classList.toggle('input-active', pointerLocked);
                 inputStatus.innerHTML = pointerLocked ? `Input Active (ESC to release)` : '';
+                // Hide controls when pointer is locked
+                const videoContainer = video.closest('.video-container');
+                if (videoContainer) {
+                    if (pointerLocked) {
+                        videoContainer.classList.add('pointer-locked');
+                    } else {
+                        videoContainer.classList.remove('pointer-locked');
+                    }
+                }
                 if (!pointerLocked) {
                     pressedButtons.forEach(button => sendMouseRelease(button));
                 }

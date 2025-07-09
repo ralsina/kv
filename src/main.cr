@@ -27,18 +27,33 @@ module Main
   end
 
   def self.main
-    ensure_libcomposite_loaded
+    # Check for help flag before any side effects
+    if ARGV.includes?("-h") || ARGV.includes?("--help")
+      parser = OptionParser.new
+      parser.banner = "Usage: kv [options]"
+      parser.on("-d DEVICE", "--device=DEVICE", "Video device (default: auto-detect)") { }
+      parser.on("-r RESOLUTION", "--resolution=RESOLUTION", "Video resolution WIDTHxHEIGHT (default: 1920x1080)") { }
+      parser.on("-f FPS", "--fps=FPS", "Video framerate (default: 30)") { }
+      parser.on("-p PORT", "--port=PORT", "HTTP server port (default: 3000)") { }
+      parser.on("-h", "--help", "Show this help") { }
+      Log.info { parser.to_s }
+      Log.info { "" }
+      Log.info { "Examples:" }
+      Log.info { "  sudo ./bin/kv                           # Auto-detect video device, 1080p@30fps" }
+      Log.info { "  sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps" }
+      Log.info { "  sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution" }
+      Log.info { "  sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080" }
+      exit 0
+    end
 
-    # Perform a full system cleanup before starting the application
-    # This is critical to prevent "device or resource busy" errors on restart
-    KVMManager.perform_system_cleanup
+    ensure_libcomposite_loaded
+    KVMManagerV4cr.perform_system_cleanup
 
     # Global KVM manager with configurable parameters
     video_device = "" # Will be auto-detected if not specified
-    width = 1920
-    height = 1080
+    width = 1920_u32
+    height = 1080_u32
     fps = 30
-    quality = 85 # JPEG quality (1-100, higher = better quality)
     port = 3000
     auto_detect = true
 
@@ -55,21 +70,21 @@ module Main
         # Handle common resolution shortcuts
         case resolution.downcase
         when "4k", "uhd"
-          width, height = 3840, 2160
+          width, height = 3840_u32, 2160_u32
         when "1440p", "qhd"
-          width, height = 2560, 1440
+          width, height = 2560_u32, 1440_u32
         when "1080p", "fhd"
-          width, height = 1920, 1080
+          width, height = 1920_u32, 1080_u32
         when "720p", "hd"
-          width, height = 1280, 720
+          width, height = 1280_u32, 720_u32
         when "480p"
-          width, height = 854, 480
+          width, height = 854_u32, 480_u32
         when "360p"
-          width, height = 640, 360
+          width, height = 640_u32, 360_u32
         else
           if resolution =~ /^(\d+)x(\d+)$/
-            width = $1.to_i
-            height = $2.to_i
+            width = $1.to_u32
+            height = $2.to_u32
           else
             Log.error { "Invalid resolution format. Use WIDTHxHEIGHT (e.g., 1920x1080) or shortcuts:" }
             Log.error { "  4k/uhd (3840x2160), 1440p/qhd (2560x1440), 1080p/fhd (1920x1080)" }
@@ -87,14 +102,6 @@ module Main
         end
       end
 
-      parser.on("-q QUALITY", "--quality=QUALITY", "JPEG quality 1-100 (default: 85, higher = better quality)") do |qual|
-        quality = qual.to_i
-        if quality < 1 || quality > 100
-          Log.error { "Invalid quality. Must be between 1 and 100" }
-          exit 1
-        end
-      end
-
       parser.on("-p PORT", "--port=PORT", "HTTP server port (default: 3000)") do |server_port|
         port = server_port.to_i
         if port <= 0 || port > 65535
@@ -107,10 +114,10 @@ module Main
         Log.info { parser.to_s }
         Log.info { "" }
         Log.info { "Examples:" }
-        Log.info { "  sudo ./bin/kv                           # Auto-detect video device, 1080p@30fps, quality 85%" }
-        Log.info { "  sudo ./bin/kv -r 720p -f 60 -q 95      # Auto-detect device, HD 720p at 60fps, high quality" }
+        Log.info { "  sudo ./bin/kv                           # Auto-detect video device, 1080p@30fps" }
+        Log.info { "  sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps" }
         Log.info { "  sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution" }
-        Log.info { "  sudo ./bin/kv -r 1280x720 -p 8080 -q 70 # Custom resolution, port 8080, medium quality" }
+        Log.info { "  sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080" }
         exit 0
       end
 
@@ -121,30 +128,28 @@ module Main
       end
     end
 
-    # Auto-detect video device if not specified
-    if auto_detect || video_device.empty?
-      Log.info { "Auto-detecting video capture device..." }
-
-      if detected_device = VideoUtils.find_best_capture_device(width, height)
+    # Auto-detect or validate video device
+    if video_device.empty? || auto_detect
+      Log.info { "No video device specified, attempting auto-detection..." }
+      detected_device = V4crVideoUtils.find_best_capture_device(width, height)
+      if detected_device
         video_device = detected_device.device
+        Log.info { "Auto-detected video device: #{video_device}" }
       else
-        Log.error { "No suitable video capture device found" }
-        Log.error { "   Please specify a device manually with -d /dev/videoX" }
+        Log.error { "❌ No suitable video capture device found!" }
+        Log.error { "   Please connect a V4L2-compatible device or specify one with -d /dev/videoX" }
         exit 1
       end
     else
-      # Validate the manually specified device
       Log.info { "Validating specified video device: #{video_device}" }
-      if VideoUtils.validate_device(video_device, width, height, fps)
-        Log.info { "" }
-      else
-        Log.warn { "Device validation failed. Continuing anyway..." }
-        Log.info { "" }
+      unless V4crVideoUtils.validate_device(video_device, width, height, fps)
+        Log.error { "❌ Specified device #{video_device} is not valid or not available!" }
+        exit 1
       end
     end
 
     # Create and set the global KVM manager instance
-    kvm_manager = KVMManager.new(video_device, width, height, fps, quality)
+    kvm_manager = KVMManagerV4cr.new(video_device, width, height, fps)
     GlobalKVM.set_manager(kvm_manager)
 
     # Cleanup on exit
@@ -153,17 +158,16 @@ module Main
     end
 
     Log.info { "" }
-    Log.info { "🖥️  Ultra Low-Latency KVM Server" }
+    Log.info { "🖥️  Ultra Low-Latency KVM Server (V4cr)" }
     Log.info { "━" * 50 }
     Log.info { "📹 Video device: #{kvm_manager.video_device}" }
     Log.info { "📐 Resolution: #{kvm_manager.width}x#{kvm_manager.height}@#{kvm_manager.fps}fps" }
-    Log.info { "📸 Quality: #{kvm_manager.quality}%" }
     Log.info { "🌐 Web interface: http://localhost:#{port}" }
     Log.info { "📡 MJPEG stream: http://localhost:#{port}/video.mjpg" }
     Log.info { "⌨️  HID keyboard: #{kvm_manager.keyboard_enabled? ? "✅ Ready" : "❌ Disabled"}" }
     Log.info { "🖱️  HID mouse: #{kvm_manager.mouse_enabled? ? "✅ Ready" : "❌ Disabled"}" }
-    Log.info { "⚡ Architecture: Direct MJPEG + USB HID" }
-    Log.info { "🎯 Target latency: <100ms" }
+    Log.info { "⚡ Architecture: Direct V4cr MJPEG + USB HID" }
+    Log.info { "🎯 Target latency: <50ms" }
     Log.info { "" }
     Log.warn { "⚠️  Note: HID keyboard and mouse require root privileges and USB OTG support" }
     Log.warn { "   Run with: sudo ./bin/kv" }
@@ -172,11 +176,10 @@ module Main
     Log.info { "   Video device: #{video_device}" }
     Log.info { "   Resolution: #{width}x#{height}" }
     Log.info { "   Framerate: #{fps} fps" }
-    Log.info { "   Quality: #{quality}%" }
     Log.info { "   Server port: #{port}" }
     Log.info { "" }
-    Log.info { "Inspired by raspivid_mjpeg_server design principles" }
-    Log.info { "for minimal latency streaming." }
+    Log.info { "V4cr implementation for zero-copy video streaming" }
+    Log.info { "with native V4L2 access for minimal latency." }
     Log.info { "" }
 
     Kemal.run(port: port)

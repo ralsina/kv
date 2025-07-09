@@ -7,9 +7,9 @@ require "./kvm_manager"
 module GlobalKVM
   Log = ::Log.for(self)
 
-  @@manager : KVMManager?
+  @@manager : KVMManagerV4cr?
 
-  def self.set_manager(manager : KVMManager)
+  def self.set_manager(manager : KVMManagerV4cr)
     @@manager = manager
   end
 
@@ -36,49 +36,11 @@ get "/video.mjpg" do |env|
     next
   end
 
-  # Create a channel for this client
-  client_channel = Channel(Bytes).new
-  manager.register_client(client_channel)
-
+  # Directly stream MJPEG frames to the HTTP response using v4cr logic
   begin
-    # Send initial boundary (must be the very first thing, no blank lines)
-    env.response.print "--mjpegboundary\r\n"
-    env.response.flush
-
-    # Stream data from the manager to the client
-    loop do
-      begin
-        Log.debug { "Waiting for next frame on client_channel..." }
-        data = client_channel.receive
-        Log.debug { "Got frame of size #{data.size} bytes, sending to client..." }
-
-        # Check for valid JPEG SOI/EOI markers
-        if data.size < 4 || data[0] != 0xFF_u8 || data[1] != 0xD8_u8 || data[-2] != 0xFF_u8 || data[-1] != 0xD9_u8
-          Log.warn { "Skipping invalid JPEG frame (bad SOI/EOI markers)" }
-          next
-        end
-
-        env.response.print "Content-Type: image/jpeg\r\n"
-        env.response.print "Content-Length: #{data.size}\r\n"
-        env.response.print "\r\n"
-        env.response.write(data)
-        env.response.print "\r\n--mjpegboundary\r\n"
-        env.response.flush
-      rescue ex : IO::Error
-        Log.info { "Client disconnected from MJPEG stream: #{ex.message}" }
-        break
-      rescue ex
-        Log.error { "Unexpected error while streaming to client: #{ex.message}\n#{ex.backtrace.join("\n")}" }
-        break
-      end
-    end
+    manager.@video_capture.stream_to_http_response(env.response)
   rescue ex
-    Log.error { "Client streaming error (outer): #{ex.message}\n#{ex.backtrace.join("\n")}" }
-  ensure
-    # Unregister the client when they disconnect
-    manager.unregister_client(client_channel)
-    client_channel.close
-    Log.debug { "Client disconnected and unregistered." }
+    Log.error { "MJPEG streaming error: #{ex.message}\n#{ex.backtrace.join("\n")}" }
   end
 end
 
@@ -100,32 +62,6 @@ post "/api/video/stop" do |env|
   manager = GlobalKVM.get_manager
   manager.stop_video_stream
   {success: true, message: "Video stream stopped"}.to_json
-end
-
-post "/api/video/quality" do |env|
-  env.response.content_type = "application/json"
-  manager = GlobalKVM.get_manager
-
-  if env.request.body
-    body = JSON.parse((env.request.body.try &.gets_to_end).to_s)
-  else
-    next
-  end
-
-  begin
-    quality = body["quality"]?.try(&.as_i)
-
-    if !quality
-      {success: false, message: "No quality specified"}.to_json
-    elsif quality < 1 || quality > 100
-      {success: false, message: "Quality must be between 1-100"}.to_json
-    else
-      manager.set_quality(quality)
-      {success: true, message: "Video quality set to #{quality}%", quality: quality}.to_json
-    end
-  rescue ex
-    {success: false, message: "Invalid request: #{ex.message}"}.to_json
-  end
 end
 
 # API endpoints for keyboard control

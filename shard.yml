@@ -15,3 +15,5 @@ license: MIT
 dependencies:
   kemal:
     github: kemalcr/kemal
+  v4cr:
+    github: ralsina/v4cr

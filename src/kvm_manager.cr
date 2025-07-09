@@ -2,33 +2,28 @@ require "./keyboard"
 require "./mouse"
 require "./composite"
 require "./mass_storage_manager"
+require "./video_capture"
 require "kemal"
 
-# Integrated KVM manager - handles video, keyboard, and mouse
-class KVMManager
+# Updated KVM manager using V4cr for video capture instead of FFmpeg
+class KVMManagerV4cr
   Log = ::Log.for(self)
 
-  @video_running = false
   @keyboard_enabled = false
   @mouse_enabled = false
   @video_device : String
   @keyboard_device : String = ""
   @mouse_device : String = ""
-  @width : Int32
-  @height : Int32
+  @width : UInt32
+  @height : UInt32
   @fps : Int32
-  @quality : Int32
   @pressed_buttons = Set(String).new
   @mass_storage : MassStorageManager
+  @video_capture : V4crVideoCapture
 
-  # For robust ffmpeg management
-  @ffmpeg_process : Process?
-  @stop_ffmpeg = Channel(Nil).new
-  @clients = [] of Channel(Bytes)
-  @clients_mutex = Mutex.new
-
-  def initialize(@video_device = "/dev/video1", @width = 640, @height = 480, @fps = 30, @quality = 80)
-    @mass_storage = MassStorageManager.new # No arguments needed
+  def initialize(@video_device = "/dev/video1", @width = 640_u32, @height = 480_u32, @fps = 30)
+    @mass_storage = MassStorageManager.new
+    @video_capture = V4crVideoCapture.new(@video_device, @width, @height)
     setup_hid_devices
     start_video_stream # Start video automatically
   end
@@ -65,152 +60,30 @@ class KVMManager
   end
 
   def start_video_stream
-    return if @video_running
-    @video_running = true
-    Log.info { "Starting robust video stream loop..." }
+    Log.info { "Starting V4cr video stream..." }
+    success = @video_capture.start_streaming
 
-    spawn do
-      loop do
-        # Check if we should stop (non-blocking)
-        select
-        when @stop_ffmpeg.receive
-          @video_running = false
-          Log.warn { "Video stream loop stopped." }
-          break
-        else
-          # Continue with ffmpeg startup
-        end
-
-        command = [
-          "ffmpeg",
-          "-f", "v4l2",
-          "-input_format", "mjpeg",
-          "-video_size", "#{@width}x#{@height}",
-          "-framerate", @fps.to_s,
-          "-i", @video_device,
-          "-c:v", "mjpeg",
-          "-q:v", ((100 - @quality) / 3.125).round.to_i.to_s,
-          "-fflags", "nobuffer",
-          "-f", "mjpeg",
-          "-",
-        ]
-
-        begin
-          @ffmpeg_process = Process.new(
-            command[0], command[1..-1],
-            output: Process::Redirect::Pipe,
-            error: Process::Redirect::Pipe
-          )
-
-          if @ffmpeg_process.nil?
-            raise "FFmpeg process could not be created."
-          else
-            process : Process = @ffmpeg_process.as(Process)
-          end
-          Log.debug { "FFmpeg process started with PID: #{process.pid}" }
-          Log.debug { "FFmpeg command: #{command.join(" ")}" }
-
-          # Read from ffmpeg's stdout and extract only the latest complete JPEG frame
-          if ffmpeg_output = process.output
-            read_buffer = Bytes.new(4096)
-            frame_buffer = Bytes.new(0)
-            while @video_running
-              bytes_read = ffmpeg_output.read(read_buffer)
-              if bytes_read == 0
-                Log.debug { "FFmpeg stdout pipe closed." }
-                break
-              end
-              # Append new data to frame_buffer
-              frame_buffer += read_buffer[0, bytes_read]
-
-              # Extract all complete JPEG frames, but only send the latest one
-              offset = 0
-              latest_frame = nil
-              while offset < frame_buffer.size
-                # Find SOI marker
-                soi = frame_buffer.index(0xFF_u8, offset)
-                if soi && soi + 1 < frame_buffer.size && frame_buffer[soi + 1] == 0xD8_u8
-                  # Found SOI, now look for EOI
-                  eoi = soi + 2
-                  while eoi + 1 < frame_buffer.size
-                    if frame_buffer[eoi] == 0xFF_u8 && frame_buffer[eoi + 1] == 0xD9_u8
-                      # Found EOI, extract frame
-                      jpeg_end = eoi + 2
-                      latest_frame = frame_buffer[soi, jpeg_end - soi]
-                      offset = jpeg_end
-                      break
-                    end
-                    eoi += 1
-                  end
-                  # If EOI not found, wait for more data
-                  if eoi + 1 >= frame_buffer.size
-                    break
-                  end
-                else
-                  # No SOI found, discard processed bytes
-                  break
-                end
-              end
-              # Remove processed bytes from frame_buffer
-              if offset > 0
-                frame_buffer = frame_buffer[offset..-1]
-              end
-              # Only broadcast the latest complete frame (skip intermediates)
-              if latest_frame
-                broadcast(latest_frame)
-              end
-            end
-          end
-        rescue ex
-          Log.error { "FFmpeg process failed: #{ex.message}" }
-          if @ffmpeg_process
-            if error_io = @ffmpeg_process.as(Process).error
-              error_output = error_io.gets_to_end
-              Log.error { "FFmpeg stderr: #{error_output}" }
-            end
-          end
-        ensure
-          # Make sure process is terminated
-          if @ffmpeg_process
-            p = @ffmpeg_process.as(Process)
-            p.signal(Signal::TERM) if p.exists?
-            p.wait
-            @ffmpeg_process = nil
-          end
-
-          # If the loop is still supposed to be running, wait before restarting
-          if @video_running
-            Log.info { "FFmpeg process exited. Restarting in 2 seconds..." }
-            sleep 2.seconds
-          end
-        end
+    if success
+      Log.info { "V4cr video stream started successfully" }
+      if info = @video_capture.device_info
+        Log.info { "Device: #{info[:card]} (#{info[:device]})" }
+        Log.info { "Format: #{info[:format]} #{info[:width]}x#{info[:height]}" }
       end
+    else
+      Log.error { "Failed to start V4cr video stream" }
     end
-    true
+
+    success
   end
 
   def stop_video_stream
-    return unless @video_running
-    @video_running = false
-    @stop_ffmpeg.send(nil) # Blocking send to signal stop
-
-    # Terminate the process if it's running
-    if process = @ffmpeg_process
-      process.signal(Signal::TERM) if process.exists?
-      @ffmpeg_process = nil
-    end
-
-    # Close all client channels
-    @clients_mutex.synchronize do
-      @clients.each(&.close)
-      @clients.clear
-    end
-
-    Log.warn { "Video stream disabled" }
+    Log.info { "Stopping V4cr video stream..." }
+    @video_capture.stop_streaming
+    Log.info { "V4cr video stream stopped" }
   end
 
   def video_running?
-    @video_running
+    @video_capture.running?
   end
 
   def keyboard_enabled?
@@ -331,37 +204,36 @@ class KVMManager
   end
 
   def width
-    @width
+    @width.to_i32
   end
 
   def height
-    @height
+    @height.to_i32
   end
 
   def fps
     @fps
   end
 
-  def quality
-    @quality
-  end
-
-  def set_quality(new_quality : Int32)
-    @quality = new_quality.clamp(1, 100)
-  end
-
   def status
-    video_status = if @video_running
+    video_status = if @video_capture.running?
+                     info = @video_capture.device_info
                      {
-                       status:     "running",
-                       device:     @video_device,
-                       resolution: "#{@width}x#{@height}",
-                       fps:        @fps,
-                       stream_url: "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
+                       status:       "running",
+                       device:       @video_device,
+                       resolution:   "#{@width}x#{@height}",
+                       fps:          @fps,
+                       stream_url:   "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
+                       driver:       info.try(&.[:driver]) || "unknown",
+                       card:         info.try(&.[:card]) || "unknown",
+                       format:       info.try(&.[:format]) || "unknown",
+                       clients:      nil, # client_count removed, always nil
+                       capture_type: "v4cr",
                      }
                    else
                      {
-                       status: "stopped",
+                       status:       "stopped",
+                       capture_type: "v4cr",
                      }
                    end
 
@@ -385,34 +257,7 @@ class KVMManager
     }
   end
 
-  # Register a new client to receive video stream data
-  def register_client(client_channel : Channel(Bytes))
-    @clients_mutex.synchronize do
-      @clients << client_channel
-    end
-  end
-
-  # Unregister a client
-  def unregister_client(client_channel : Channel(Bytes))
-    @clients_mutex.synchronize do
-      @clients.delete(client_channel)
-    end
-  end
-
-  # Broadcast data to all connected clients
-  private def broadcast(data : Bytes)
-    clients_to_remove = [] of Channel(Bytes)
-    @clients_mutex.synchronize do
-      @clients.each do |client|
-        begin
-          client.send(data) # Blocking send, but we handle closed channels
-        rescue Channel::ClosedError
-          clients_to_remove << client
-        end
-      end
-      @clients.reject! { |client| clients_to_remove.includes?(client) }
-    end
-  end
+  # Channel-based video client logic removed; direct streaming only
 
   # Cleanup method to be called on application exit
   def cleanup

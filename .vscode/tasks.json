@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build and Run KVM Server",
+			"type": "shell",
+			"command": "cd /root/kv && crystal build src/main.cr -o kvm_server && sudo ./kvm_server --skip-duplicates=15 --adaptive-quality",
+			"group": "build",
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}
