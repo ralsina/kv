@@ -16,6 +16,44 @@ RUN apk add --no-cache \
     zlib-static \
     xz-dev \
     xz-static \
-    alsa-lib-dev \
-    opus-dev \
-    libogg-static
+    git \
+    cmake \
+    libtool \
+    m4 \
+    automake \
+    autoconf \
+    make \
+    linux-headers
+
+WORKDIR /app
+RUN rm -rf alsa-lib ogg opus
+RUN git clone https://github.com/alsa-project/alsa-lib.git
+
+WORKDIR /app/alsa-lib
+RUN which libtoolize
+RUN libtoolize --force --copy --automake
+RUN aclocal 
+RUN autoheader 
+RUN automake --foreign --copy --add-missing 
+RUN autoconf 
+RUN ./configure --enable-shared=no --enable-static=yes --disable-dependency-tracking
+RUN make
+RUN cp src/.libs/libasound.a /usr/lib
+
+WORKDIR /app
+RUN git clone https://gitlab.xiph.org/xiph/ogg
+WORKDIR /app/ogg
+RUN mkdir build 
+WORKDIR /app/ogg/build
+RUN cmake .. 
+RUN make
+RUN cp libogg.a /usr/lib
+
+WORKDIR /app
+RUN git clone https://github.com/xiph/opus.git
+WORKDIR /app/opus
+RUN mkdir build 
+WORKDIR /app/opus/build
+RUN cmake .. 
+RUN make
+RUN cp libopus.a /usr/lib
