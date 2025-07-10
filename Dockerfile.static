@@ -15,4 +15,7 @@ RUN apk add --no-cache \
     zlib-dev \
     zlib-static \
     xz-dev \
-    xz-static
+    xz-static \
+    alsa-lib-dev \
+    opus-dev \
+    libogg-static
