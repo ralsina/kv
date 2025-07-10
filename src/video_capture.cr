@@ -215,6 +215,7 @@ class V4crVideoCapture
       Log.info { "Client disconnected or error: #{e.message}" }
     end
   end
+
   # Return the most recent measured FPS (frames per second) for MJPEG streaming
   def actual_fps : Float64
     @actual_fps
@@ -224,7 +225,6 @@ class V4crVideoCapture
     @streaming_fiber = spawn do
       device = @device
       frame_count = 0
-      saved_invalid = false
       frame_sleep = (1000 // (@fps > 0 ? @fps : 30)).milliseconds
       loop do
         # Check for stop signal (non-blocking)
