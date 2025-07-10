@@ -17,3 +17,5 @@ dependencies:
     github: kemalcr/kemal
   v4cr:
     github: ralsina/v4cr
+  opus:
+    github: krthr/opus

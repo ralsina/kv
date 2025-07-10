@@ -199,6 +199,10 @@
         .video-control-btn:active {
             transform: scale(0.95);
         }
+        .video-control-btn.active {
+            background: var(--pico-color-azure-500);
+            color: white;
+        }
         .video-control-btn .material-icons {
             font-size: 20px;
             margin: 0; /* Override default margin */
@@ -440,6 +444,9 @@
                      onerror="this.style.display='none'; document.getElementById('no-video').style.display='block';"
                      crossorigin="anonymous">
                 <div class="video-controls">
+                    <button id="audio-btn" class="video-control-btn" onclick="toggleAudio()" title="Toggle Audio">
+                        <span class="material-icons">volume_up</span>
+                    </button>
                     <button id="fullscreen-btn" class="video-control-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">
                         <span class="material-icons">fullscreen</span>
                     </button>
@@ -462,6 +469,81 @@
     </main>
 
     <script>
+        let audioStream = null;
+        let audioLatencyInterval = null;
+
+        function manageAudioLatency(audioElement) {
+            if (audioLatencyInterval) clearInterval(audioLatencyInterval);
+
+            audioLatencyInterval = setInterval(() => {
+                if (audioElement.buffered.length > 0) {
+                    const bufferEnd = audioElement.buffered.end(audioElement.buffered.length - 1);
+                    const currentTime = audioElement.currentTime;
+                    const latency = bufferEnd - currentTime;
+
+                    // If latency is over a threshold (e.g., 1 second), seek to the live edge
+                    if (latency > 1.0) {
+                        console.log(`High audio latency detected (${latency.toFixed(2)}s), seeking to live edge.`);
+                        audioElement.currentTime = bufferEnd;
+                    }
+                }
+            }, 30000); // Check every 30 seconds
+        }
+
+        function toggleAudio() {
+            const audioBtn = document.getElementById('audio-btn');
+            const icon = audioBtn.querySelector('.material-icons');
+
+            if (audioStream) {
+                // Stop the stream
+                if (audioLatencyInterval) clearInterval(audioLatencyInterval);
+                audioStream.pause();
+                audioStream.src = '';
+                audioStream.load();
+                try {
+                    document.body.removeChild(audioStream);
+                } catch (e) {}
+                audioStream = null;
+                icon.textContent = 'volume_up';
+                audioBtn.title = 'Start Audio';
+                audioBtn.classList.remove('active');
+            } else {
+                // Start the stream
+                audioStream = document.createElement('audio');
+                audioStream.src = '/audio.ogg';
+                audioStream.autoplay = false; // We control play explicitly
+                audioStream.style.display = 'none'; // Hide the element
+
+                audioStream.addEventListener('play', () => {
+                    icon.textContent = 'volume_off';
+                    audioBtn.title = 'Stop Audio';
+                    audioBtn.classList.add('active');
+                    manageAudioLatency(audioStream);
+                });
+
+                audioStream.addEventListener('error', (e) => {
+                    console.error("Audio playback error:", e);
+                    // Reset on error
+                    if (audioLatencyInterval) clearInterval(audioLatencyInterval);
+                    if (audioStream) {
+                        audioStream.pause();
+                        audioStream.src = '';
+                        audioStream.load();
+                        try {
+                            document.body.removeChild(audioStream);
+                        } catch (err) {}
+                        audioStream = null;
+                    }
+                    icon.textContent = 'volume_up';
+                    audioBtn.title = 'Start Audio';
+                    audioBtn.classList.remove('active');
+                });
+
+                document.body.appendChild(audioStream);
+                audioStream.play().catch(e => console.error("Audio play failed:", e));
+            }
+        }
+
         // FPS Indicator: Use server-reported FPS from /api/status
         function updateFpsIndicator(fps) {
             const fpsIndicator = document.getElementById('fps-indicator');

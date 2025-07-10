@@ -4,7 +4,7 @@ KV is a modern, simple remote KVM solution. Minimal dependencies, easy to set up
 
 ## Features
 
-* Stream video from the server's HDMI output
+* Stream video and audio from the server's HDMI output
 * Send keyboard and mouse events from a single-board computer (SBC) to the server
 * Expose disk images to the server as if they were plugged via USB thumb drives
 
@@ -12,9 +12,9 @@ You can see a short demo video [here](https://youtu.be/_NCVytMPW18?si=67kIt7nWbr
 
 ## TODO
 
-* Audio streaming
+* ✅ Audio streaming
 * Use ttyd to access the kvm itself
-* Performance improvements
+* ✅ Performance improvements
 * Better UX for mass storage
 
 ## Installation

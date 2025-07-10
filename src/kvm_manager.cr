@@ -12,6 +12,7 @@ class KVMManagerV4cr
   @keyboard_enabled = false
   @mouse_enabled = false
   @video_device : String
+  @audio_device : String
   @keyboard_device : String = ""
   @mouse_device : String = ""
   @width : UInt32
@@ -21,7 +22,7 @@ class KVMManagerV4cr
   @mass_storage : MassStorageManager
   @video_capture : V4crVideoCapture
 
-  def initialize(@video_device = "/dev/video1", @width = 640_u32, @height = 480_u32, @fps = 30)
+  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30)
     @mass_storage = MassStorageManager.new
     @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
     setup_hid_devices
@@ -201,6 +202,10 @@ class KVMManagerV4cr
 
   def video_device
     @video_device
+  end
+
+  def audio_device
+    @audio_device
   end
 
   def width

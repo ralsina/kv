@@ -51,6 +51,7 @@ module Main
 
     # Global KVM manager with configurable parameters
     video_device = "" # Will be auto-detected if not specified
+    audio_device = "hw:1,0" # Default audio device
     width = 1920_u32
     height = 1080_u32
     fps = 30
@@ -64,6 +65,10 @@ module Main
       parser.on("-d DEVICE", "--device=DEVICE", "Video device (default: auto-detect)") do |device|
         video_device = device
         auto_detect = false
+      end
+
+      parser.on("-a DEVICE", "--audio-device=DEVICE", "Audio device (default: hw:1,0)") do |device|
+        audio_device = device
       end
 
       parser.on("-r RESOLUTION", "--resolution=RESOLUTION", "Video resolution WIDTHxHEIGHT (default: 1920x1080)") do |resolution|
@@ -149,7 +154,7 @@ module Main
     end
 
     # Create and set the global KVM manager instance
-    kvm_manager = KVMManagerV4cr.new(video_device, width, height, fps)
+    kvm_manager = KVMManagerV4cr.new(video_device, audio_device, width, height, fps)
     GlobalKVM.set_manager(kvm_manager)
 
     # Cleanup on exit
