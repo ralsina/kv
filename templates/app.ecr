@@ -462,50 +462,18 @@
     </main>
 
     <script>
-        // FPS Counter for MJPEG video stream
-        (function() {
-            let lastFrameTime = 0;
-            let frameCount = 0;
-            let fps = 0;
-            const fpsIndicator = () => document.getElementById('fps-indicator');
-            const video = document.getElementById('video-stream');
-            if (video) {
-                let lastUpdate = performance.now();
-                video.addEventListener('load', function fpsCountHandler() {
-                    // Not used: 'load' only fires once, so we use polling below
-                });
-                // Use polling to detect frame changes (for MJPEG streams)
-                let lastSrc = '';
-                setInterval(() => {
-                    if (!video.complete || video.naturalWidth === 0) return;
-                    // MJPEG: src changes with each frame (browsers reload the image)
-                    // But in this app, the src is static, so we check .currentSrc and .naturalWidth
-                    // Instead, we can use a trick: listen for the 'load' event on the <img>, but that's only once.
-                    // So, we can poll the .currentSrc and .naturalWidth, and count changes in .naturalWidth as a proxy for new frames.
-                    // Or, if the backend appends a cache-busting query param, we could check .src, but here we use .naturalWidth.
-                    let now = performance.now();
-                    if (video.naturalWidth !== 0 && video.naturalHeight !== 0) {
-                        if (lastFrameTime !== 0) {
-                            frameCount++;
-                        }
-                        lastFrameTime = now;
-                    }
-                    // Update FPS every second
-                    if (now - lastUpdate > 1000) {
-                        fps = frameCount;
-                        frameCount = 0;
-                        lastUpdate = now;
-                        if (fpsIndicator()) {
-                            fpsIndicator().innerHTML = `<span class="material-icons">timer</span>FPS:${fps}`;
-                            fpsIndicator().className = '';
-                            if (fps >= 30) fpsIndicator().classList.add('good');
-                            else if (fps >= 15) fpsIndicator().classList.add('warning');
-                            else fpsIndicator().classList.add('bad');
-                        }
-                    }
-                }, 1000/20); // Poll at 20Hz
+        // FPS Indicator: Use server-reported FPS from /api/status
+        function updateFpsIndicator(fps) {
+            const fpsIndicator = document.getElementById('fps-indicator');
+            if (fpsIndicator) {
+                const fpsVal = (typeof fps === 'number' && !isNaN(fps)) ? fps.toFixed(1) : '--';
+                fpsIndicator.innerHTML = `<span class="material-icons">timer</span>FPS:${fpsVal}`;
+                fpsIndicator.className = '';
+                if (fps >= 30) fpsIndicator.classList.add('good');
+                else if (fps >= 15) fpsIndicator.classList.add('warning');
+                else fpsIndicator.classList.add('bad');
             }
-        })();
+        }
         let videoFocused = false;
         let pointerLocked = false;
         let pressedButtons = new Set(); // Track currently pressed mouse buttons
@@ -535,6 +503,9 @@
                         videoStatus.innerHTML = '<span class="material-icons">videocam_off</span>Connecting...';
                         videoStatus.classList.remove('good');
                     }
+
+                    // Update FPS indicator with server-reported FPS
+                    updateFpsIndicator(data.video.actual_fps);
 
                     keyboardStatus.innerHTML = '<span class="material-icons">keyboard</span>' + (data.keyboard.enabled ? 'KB:✓' : 'KB:✗');
                     keyboardStatus.classList.toggle('good', data.keyboard.enabled);

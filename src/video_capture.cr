@@ -2,6 +2,7 @@ require "v4cr"
 require "log"
 
 # V4cr-based video capture module to replace FFmpeg
+
 class V4crVideoCapture
   Log = ::Log.for(self)
 
@@ -9,11 +10,15 @@ class V4crVideoCapture
   @streaming_fiber : Fiber?
   @running = false
   @stop_channel = Channel(Nil).new
+  @fps : Int32
+  @frame_count : Int32 = 0
+  @actual_fps : Float64 = 0.0
+  @last_fps_time : Time::Span = Time.monotonic
 
   MJPEG_BOUNDARY = "mjpegboundary"
 
   # All channel-based video client logic removed; direct streaming only
-  def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32)
+  def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32, @fps : Int32 = 30)
   end
 
   # Initialize and configure the V4L2 device
@@ -158,7 +163,7 @@ class V4crVideoCapture
   def stream_to_http_response(response)
     device = @device
     boundary = "--mjpegboundary"
-    frame_interval = 33.milliseconds
+    frame_interval = (1000 // (@fps > 0 ? @fps : 30)).milliseconds
     last_write_time = Time.monotonic
     skipped = 0
     begin
@@ -182,6 +187,7 @@ class V4crVideoCapture
             response.write(data)
             response.write("\r\n".to_slice)
             response.flush
+            @frame_count += 1
           end
           skipped = 0
         else
@@ -191,6 +197,13 @@ class V4crVideoCapture
             Log.debug { "MJPEG: Skipping frame(s) to catch up (#{skipped} skipped, write took #{elapsed.total_milliseconds.round(1)}ms)" }
           end
         end
+        # Update FPS counter every second
+        if (now - @last_fps_time) >= 1.second
+          elapsed = (now - @last_fps_time).total_seconds
+          @actual_fps = @frame_count.to_f64 / elapsed
+          @frame_count = 0
+          @last_fps_time = now
+        end
         last_write_time = now
         device.queue_buffer(buffer)
         # No sleep: frame pacing is now dynamic
@@ -199,12 +212,17 @@ class V4crVideoCapture
       Log.info { "Client disconnected or error: #{e.message}" }
     end
   end
+  # Return the most recent measured FPS (frames per second) for MJPEG streaming
+  def actual_fps : Float64
+    @actual_fps
+  end
 
   private def start_streaming_fiber
     @streaming_fiber = spawn do
       device = @device
       frame_count = 0
       saved_invalid = false
+      frame_sleep = (1000 // (@fps > 0 ? @fps : 30)).milliseconds
       loop do
         # Check for stop signal (non-blocking)
         select
@@ -217,7 +235,6 @@ class V4crVideoCapture
 
         begin
           # Dequeue a frame buffer
-
           buffer = device.dequeue_buffer
           frame_count += 1
           # Always use buffer.read_data for the actual frame data
@@ -227,12 +244,12 @@ class V4crVideoCapture
                        data[0] == 0xFF && data[1] == 0xD8 &&
                        data[-2] == 0xFF && data[-1] == 0xD9
 
-          if frame_count <= 10 || !valid_jpeg
+          if !valid_jpeg
             Log.debug { "[Frame #{frame_count}] size=#{size} valid_jpeg=#{valid_jpeg}" }
           end
 
           if valid_jpeg
-            # Broadcast frame to all clients
+            # No-op: direct streaming only, do not increment @frame_count here
             broadcast_frame(data)
           else
             Log.debug { "Received invalid JPEG frame, skipping (frame #{frame_count}, size #{size})" }
@@ -241,8 +258,8 @@ class V4crVideoCapture
           # Always re-queue the buffer
           device.queue_buffer(buffer)
 
-          # Control frame rate (~30 FPS)
-          sleep(33.milliseconds)
+          # Control frame rate
+          sleep(frame_sleep)
         rescue e
           Log.error { "Error in streaming fiber: #{e.message}" }
           break unless @running

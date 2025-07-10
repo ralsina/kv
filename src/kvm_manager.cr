@@ -23,7 +23,7 @@ class KVMManagerV4cr
 
   def initialize(@video_device = "/dev/video1", @width = 640_u32, @height = 480_u32, @fps = 30)
     @mass_storage = MassStorageManager.new
-    @video_capture = V4crVideoCapture.new(@video_device, @width, @height)
+    @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
     setup_hid_devices
     start_video_stream # Start video automatically
   end
@@ -223,6 +223,7 @@ class KVMManagerV4cr
                        device:       @video_device,
                        resolution:   "#{@width}x#{@height}",
                        fps:          @fps,
+                       actual_fps:   @video_capture.actual_fps,
                        stream_url:   "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
                        driver:       info.try(&.[:driver]) || "unknown",
                        card:         info.try(&.[:card]) || "unknown",
