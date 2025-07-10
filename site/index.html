@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KV - Modern Remote KVM</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root {
+            --pico-font-family: "Oxanium", sans-serif;
+        }
+        body {
+            padding-bottom: 5rem;
+        }
+        .hero {
+            text-align: center;
+            padding: 4rem 0;
+        }
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--pico-secondary);
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 4rem;
+        }
+        .feature {
+            text-align: center;
+        }
+        .feature h3 {
+            margin-bottom: 1rem;
+        }
+        .footer {
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 4rem;
+            border-top: 1px solid var(--pico-muted-border-color);
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="container-fluid">
+        <ul>
+            <li><strong>KV</strong></li>
+        </ul>
+        <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#diagram">Diagram</a></li>
+            <li><a href="https://github.com/ralsina/kv" class="secondary" target="_blank">GitHub</a></li>
+        </ul>
+    </nav>
+    <main class="container">
+        <section class="hero">
+            <h1>KV: A modern, simple remote KVM</h1>
+            <p>Minimal dependencies, easy to set up, and designed for performance.</p>
+            <a href="https://github.com/ralsina/kv/releases" role="button" class="primary">Download Now</a>
+        </section>
+
+        <section id="features" class="features">
+            <div class="feature">
+                <h3>Stream Video</h3>
+                <p>Stream video from the server's HDMI output with ultra-low latency.</p>
+            </div>
+            <div class="feature">
+                <h3>Remote Control</h3>
+                <p>Send keyboard and mouse events from a single-board computer (SBC) to the server.</p>
+            </div>
+            <div class="feature">
+                <h3>Virtual Media</h3>
+                <p>Expose disk images to the server as if they were plugged in via USB thumb drives.</p>
+            </div>
+            <div class="feature">
+                <h3>Commodity Hardware</h3>
+                <p>Works with readily available hardware, no specific SBC required beyond an OTG port and a USB video capture dongle.</p>
+            </div>
+        </section>
+
+        <section id="diagram" style="text-align: center; margin-top: 4rem;">
+            <h2>System Diagram</h2>
+            <p>Understand how KV connects your devices:</p>
+            <img src="kvm.svg" alt="KV System Diagram" style="max-width: 100%; height: auto; margin-top: 2rem;">
+        </section>
+    </main>
+    <section id="hardware-help" style="text-align: center; margin-top: 4rem; padding: 2rem; background: var(--pico-background-color); border-radius: var(--pico-border-radius);">
+        <h2>Need Help with a Hardware Project?</h2>
+        <p>If you're looking to integrate KV into your own hardware project and need assistance, don't hesitate to reach out!</p>
+        <p>We're happy to help with guidance and support.</p>
+        <a href="https://github.com/ralsina/kv/issues" role="button" class="secondary">Ask for Help on GitHub</a>
+    </section>
+    <footer class="footer">
+        <p>&copy; 2025 KV Project. All rights reserved.</p>
+    </footer>
+</body>
+</html>
