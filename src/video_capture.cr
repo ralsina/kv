@@ -177,18 +177,21 @@ class V4crVideoCapture
 
         now = Time.monotonic
         elapsed = now - last_write_time
-        if elapsed < frame_interval
-          # We're ahead of schedule, send frame
-          if valid_jpeg
-            response.write(boundary.to_slice)
-            response.write("\r\n".to_slice)
-            response.write("Content-Type: image/jpeg\r\n".to_slice)
-            response.write("Content-Length: #{size}\r\n\r\n".to_slice)
-            response.write(data)
-            response.write("\r\n".to_slice)
-            response.flush
-            @frame_count += 1
+        if valid_jpeg
+          # Throttle to target FPS: if we're ahead of schedule, sleep
+          if elapsed < frame_interval
+            sleep(frame_interval - elapsed)
+            now = Time.monotonic
+            elapsed = now - last_write_time
           end
+          response.write(boundary.to_slice)
+          response.write("\r\n".to_slice)
+          response.write("Content-Type: image/jpeg\r\n".to_slice)
+          response.write("Content-Length: #{size}\r\n\r\n".to_slice)
+          response.write(data)
+          response.write("\r\n".to_slice)
+          response.flush
+          @frame_count += 1
           skipped = 0
         else
           # We're behind, skip this frame
@@ -206,7 +209,7 @@ class V4crVideoCapture
         end
         last_write_time = now
         device.queue_buffer(buffer)
-        # No sleep: frame pacing is now dynamic
+        # Frame pacing is now enforced by sleep above
       end
     rescue e
       Log.info { "Client disconnected or error: #{e.message}" }
