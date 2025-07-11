@@ -4,6 +4,7 @@
     <title>KVM Stream</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="manifest" href="/assets/manifest.json">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
@@ -886,6 +887,18 @@
                     body: JSON.stringify({image: null})
                 }).then(() => { setTimeout(() => { refreshUsbImages(); updateStatus(); }, 300); });
             };
+
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/assets/service-worker.js')
+                        .then(registration => {
+                            console.log('Service Worker registered with scope:', registration.scope);
+                        })
+                        .catch(error => {
+                            console.error('Service Worker registration failed:', error);
+                        });
+                });
+            }
         });
 
         // Sidebar Toggle with Local Storage

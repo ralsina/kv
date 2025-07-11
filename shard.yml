@@ -19,3 +19,8 @@ dependencies:
     github: ralsina/v4cr
   opus:
     github: krthr/opus
+  baked_file_system:
+    github: ralsina/baked_file_system
+    branch: master
+  baked_file_handler:
+    github: ralsina/baked_file_handler

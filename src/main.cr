@@ -4,9 +4,16 @@ require "option_parser"
 require "./kvm_manager"
 require "./endpoints"
 require "./video_utils"
+require "baked_file_system"
+require "baked_file_handler"
 
 module Main
   Log = ::Log.for("main")
+
+  class Assets
+    extend BakedFileSystem
+    bake_folder "../assets"
+  end
 
   # Check for libcomposite kernel module and load if missing
   def self.ensure_libcomposite_loaded
@@ -50,7 +57,7 @@ module Main
     KVMManagerV4cr.perform_system_cleanup
 
     # Global KVM manager with configurable parameters
-    video_device = "" # Will be auto-detected if not specified
+    video_device = ""       # Will be auto-detected if not specified
     audio_device = "hw:1,0" # Default audio device
     width = 1920_u32
     height = 1080_u32
@@ -187,6 +194,7 @@ module Main
     Log.info { "with native V4L2 access for minimal latency." }
     Log.info { "" }
 
+    add_handler BakedFileHandler::BakedFileHandler.new(Assets)
     Kemal.run(port: port)
   end
 end
