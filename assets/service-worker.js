@@ -1,12 +1,14 @@
 const CACHE_NAME = 'kvm-cache-v1';
 const urlsToCache = [
     '/',
-    '/site/manifest.json',
-    '/site/kvm.svg',
-    '/site/icons/icon-192x192.png',
-    '/site/icons/icon-512x512.png',
-    '/site/icons/icon-192x192-maskable.png',
-    '/site/icons/icon-512x512-maskable.png',
+    '/manifest.json',
+    '/kvm.svg',
+    '/style.css',
+    '/script.js',
+    '/icons/icon-192x192.png',
+    '/icons/icon-512x512.png',
+    '/icons/icon-192x192-maskable.png',
+    '/icons/icon-512x512-maskable.png',
     'https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css',
     'https://fonts.googleapis.com/icon?family=Material+Icons',
     'https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap'

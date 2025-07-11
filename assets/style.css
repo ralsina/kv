@@ -1,0 +1,324 @@
+      html, body {
+        font-family: 'Oxanium', Arial, sans-serif;
+      }
+      h1, h2, h3, h4, h5, h6, header h1 {
+        font-family: 'Oxanium', Arial, sans-serif !important;
+        letter-spacing: 0.01em;
+      }
+      .material-icons {
+        font-family: 'Material Icons', sans-serif;
+        font-size: 1em !important;
+        vertical-align: middle;
+        margin-right: 0.2em;
+        line-height: 1;
+        height: 1em;
+        width: 1em;
+        display: inline-block;
+      }
+      .video-status-bar .material-icons {
+        font-size: 1.1em !important;
+      }
+        :root {
+            --sidebar-width: 320px;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: rgba(18, 18, 20, 0.8); /* Dark translucent background */
+            backdrop-filter: blur(12px); /* Add blur effect for modern look */
+            -webkit-backdrop-filter: blur(12px); /* Safari support */
+            border-left: 1px solid rgba(64, 64, 64, 0.6); /* Semi-transparent border */
+            transform: translateX(0);
+            transition: transform 0.3s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4); /* Add shadow for depth */
+        }
+        .sidebar.collapsed {
+            transform: translateX(var(--sidebar-width));
+        }
+        .sidebar-content {
+            padding: 1rem;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .sidebar-toggle {
+            position: absolute;
+            top: 1rem; /* Move to top */
+            left: -3rem; /* Move further left for better visibility */
+            transform: none; /* Remove center transform */
+            width: 3rem; /* Make wider for better visibility */
+            height: 3rem; /* Square shape */
+            background: var(--pico-color-indigo-600);
+            border: 2px solid var(--pico-color-indigo-400); /* Thicker border */
+            border-right: none;
+            border-radius: var(--pico-border-radius) 0 0 var(--pico-border-radius);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--pico-color-white);
+            z-index: 1000;
+            font-size: 1.8rem; /* Larger icon */
+            font-weight: bold; /* Make icon bolder */
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            box-shadow: -4px 0 8px rgba(0,0,0,0.2); /* Stronger shadow */
+            transition: all 0.2s ease; /* Smooth hover effect */
+        }
+        .sidebar-toggle:hover {
+            background: var(--pico-color-indigo-500);
+            transform: translateX(-2px); /* Slide out slightly on hover */
+            box-shadow: -6px 0 12px rgba(0,0,0,0.3);
+        }
+        #main-container {
+            flex-grow: 1;
+            width: 100%;
+            padding: 0.5rem;
+            padding-top: calc(0.5rem + 2.5rem); /* Add top padding for fixed status bar */
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Allow flex shrinking */
+            /* Remove transition and margin changes - sidebar now overlays */
+        }
+        header {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: var(--pico-border-radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .video-section {
+            margin: 0.5rem 0;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Allow flex shrinking */
+        }
+        .video-stream {
+            width: 100%;
+            max-width: 100%;
+            height: 100%;
+            max-height: 100%;
+            border-radius: var(--pico-border-radius);
+            border: 2px solid transparent;
+            transition: border-color 0.3s ease;
+            cursor: pointer;
+            object-fit: contain;
+        }
+        .video-stream:focus {
+            outline: none;
+            border-color: var(--pico-color-azure-500);
+            box-shadow: 0 0 0 3px var(--pico-color-azure-100);
+        }
+        .video-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            background: #000;
+            border-radius: var(--pico-border-radius);
+            flex-grow: 1;
+            min-height: 0; /* Allow flex shrinking */
+            margin-top: 0; /* Remove top margin since status bar is now fixed */
+        }
+        .video-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.2s ease;
+            z-index: 10;
+            transform: translateY(0);
+        }
+        .video-container:hover .video-controls {
+            opacity: 1;
+        }
+        .video-container.pointer-locked .video-controls {
+            display: none !important;
+        }
+        .video-control-btn {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--pico-border-radius);
+            color: white;
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            width: 36px;
+            height: 36px;
+        }
+        .video-control-btn:hover {
+            background: rgba(0, 0, 0, 0.85);
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .video-control-btn:active {
+            transform: scale(0.95);
+        }
+        .video-control-btn.active {
+            background: var(--pico-color-azure-500);
+            color: white;
+        }
+        .video-control-btn .material-icons {
+            font-size: 20px;
+            margin: 0; /* Override default margin */
+        }
+        .video-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1100; /* Higher than sidebar */
+            background: #000;
+            border-radius: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .video-container.fullscreen .video-stream {
+            width: 100vw;
+            height: 100vh;
+            max-width: 100vw;
+            max-height: 100vh;
+            object-fit: cover;
+        }
+        .video-container.fullscreen .video-controls {
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: translateY(-10px);
+        }
+        .video-container.fullscreen:hover .video-controls {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .video-container.fullscreen .video-control-btn {
+            background: rgba(0, 0, 0, 0.5);
+            width: 42px;
+            height: 42px;
+        }
+        .video-container.fullscreen .video-control-btn .material-icons {
+            font-size: 24px;
+        }
+        .video-status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-size: 0.9rem;
+            z-index: 999; /* Below sidebar but above content */
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        .video-status-bar > span {
+            white-space: nowrap;
+        }
+        .video-status-bar .good { color: #4ade80; }
+        .video-status-bar .warning { color: #fbbf24; }
+        .video-status-bar .bad { color: #f87171; }
+        .video-status-bar .active-input {
+            color: var(--pico-color-azure-400);
+            font-weight: bold;
+        }
+        .no-video {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--pico-muted-color);
+            background: #111;
+            border-radius: var(--pico-border-radius);
+        }
+        .video-hint {
+            text-align: center;
+            margin: 0.5rem 0;
+            font-size: 0.875rem;
+        }
+        .material-icons {
+            font-family: 'Material Icons', sans-serif;
+            font-size: 1.1em;
+            vertical-align: middle;
+            margin-right: 0.2em;
+        }
+        .key-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 0.5rem;
+        }
+        .key-grid button {
+            padding: 0.5rem;
+            margin: 0;
+            font-size: 0.875rem;
+        }
+        .combo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 0.5rem;
+        }
+        .combo-grid button {
+            padding: 0.5rem;
+            margin: 0;
+            font-size: 0.75rem;
+        }
+        .compact-section { margin-bottom: 1.5rem; }
+        .compact-section h3 {
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+            border-bottom: 1px solid var(--pico-muted-border-color);
+            padding-bottom: 0.25rem;
+        }
+        footer {
+            margin-top: auto; /* Push footer to bottom */
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: var(--pico-border-radius);
+            flex-shrink: 0; /* Prevent footer from shrinking */
+        }
+        @media (max-width: 768px) {
+            :root { --sidebar-width: 280px; }
+            header {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
+            }
+            .header-controls { justify-content: center; }
+            .video-stream { max-height: 70vh; }
+        }
