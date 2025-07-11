@@ -2,6 +2,36 @@ require "file_utils"
 
 # HID Composite Module for USB Gadget functionality (Keyboard + Mouse + Mass Storage)
 module HIDComposite
+  # Returns a hash with the actual ECM/ethernet status from the system, not just internal state
+  def self.ecm_actual_status
+    iface = @@ethernet_ifname
+    net_path = "/sys/class/net/#{iface}"
+    exists = File.exists?(net_path)
+    up = false
+    ip = nil
+    operstate = nil
+    if exists
+      begin
+        operstate = File.read("#{net_path}/operstate").strip
+        up = operstate == "up"
+      rescue
+        # ignore
+      end
+      # Try to get the IP address (IPv4)
+      ip_out = `ip -4 addr show dev #{iface} 2>/dev/null`
+      if match = ip_out.match(/inet ([0-9.]+)\//)
+        ip = match[1]
+      end
+    end
+    {
+      exists: exists,
+      up: up,
+      operstate: operstate,
+      ip: ip,
+      dnsmasq_pid: @@dnsmasq_pid,
+      enabled: @@ecm_enabled
+    }
+  end
   Log = ::Log.for(self)
 
   # State for ECM/usb0 and dnsmasq
@@ -80,16 +110,14 @@ module HIDComposite
       FileUtils.mkdir_p "#{base}/functions/mass_storage.0"
     end
 
-    # Create ECM (Ethernet) function only if enabled
-    if enable_ecm
-      FileUtils.mkdir_p "#{base}/functions/ecm.usb0"
-      # Set MAC addresses (use fixed or random, but must be different)
-      dev_mac = "02:00:00:00:00:01"
-      host_mac = "02:00:00:00:00:02"
-      File.write "#{base}/functions/ecm.usb0/dev_addr", dev_mac
-      File.write "#{base}/functions/ecm.usb0/host_addr", host_mac
-      # File.write "#{base}/functions/ecm.usb0/ifname", @@ethernet_ifname
-    end
+    # Always create ECM (Ethernet) function
+    FileUtils.mkdir_p "#{base}/functions/ecm.usb0"
+    # Set MAC addresses (use fixed or random, but must be different)
+    dev_mac = "02:00:00:00:00:01"
+    host_mac = "02:00:00:00:00:02"
+    File.write "#{base}/functions/ecm.usb0/dev_addr", dev_mac
+    File.write "#{base}/functions/ecm.usb0/host_addr", host_mac
+    # File.write "#{base}/functions/ecm.usb0/ifname", @@ethernet_ifname
 
     # Write config files
     File.write "#{base}/idVendor", vendor_id
@@ -277,12 +305,10 @@ module HIDComposite
       FileUtils.ln_s "#{base}/functions/hid.mouse", mouse_dest
     end
 
-    # ECM symlink only if enabled
-    if enable_ecm
-      ecm_dest = "#{base}/configs/c.1/ecm.usb0"
-      unless File.exists?(ecm_dest) || File.symlink?(ecm_dest)
-        FileUtils.ln_s "#{base}/functions/ecm.usb0", ecm_dest
-      end
+    # Always create ECM symlink
+    ecm_dest = "#{base}/configs/c.1/ecm.usb0"
+    unless File.exists?(ecm_dest) || File.symlink?(ecm_dest)
+      FileUtils.ln_s "#{base}/functions/ecm.usb0", ecm_dest
     end
 
     # Create mass storage symlink if it was successfully configured
@@ -351,6 +377,12 @@ module HIDComposite
     # ECM/usb0 and dnsmasq are not started by default
     @@ecm_enabled = false
     @@dnsmasq_pid = nil
+
+    # Only bring up the interface if requested (legacy: enable_ecm)
+    if enable_ecm
+      self.enable_ecm_interface
+    end
+
     {keyboard: keyboard_device, mouse: mouse_device, ethernet: "/dev/usb0", ethernet_ifname: @@ethernet_ifname, dnsmasq_pid: nil}
   end
 
@@ -439,72 +471,82 @@ module HIDComposite
   end
 
   private def self.cleanup_existing_gadget(base : String)
-    # Clean up any existing gadget
+    # Clean up any existing gadget, even if partially broken
     Log.debug { "Cleaning up existing gadget at #{base}" }
 
-    # Step 1: Aggressive kernel workaround for mass storage LUN
-    ro_file = "#{base}/functions/mass_storage.0/lun.0/ro"
-    mass_storage_file = "#{base}/functions/mass_storage.0/lun.0/file"
-    if File.exists?(ro_file)
-      begin
-        File.write(ro_file, "1")
-        sleep 0.2.seconds
-      rescue ex
-        Log.debug { "Could not set ro=1 before cleanup: #{ex.message}" }
-      end
-    end
-    if File.exists?(mass_storage_file)
-      Log.debug { "Clearing mass storage file binding" }
-      begin
-        File.write(mass_storage_file, "")
-        sleep 0.5.seconds
-      rescue ex
-        Log.debug { "Failed to clear mass storage file: #{ex.message}" }
-      end
-    end
-    if File.exists?(ro_file)
-      begin
-        File.write(ro_file, "0")
-        sleep 0.2.seconds
-      rescue ex
-        Log.debug { "Could not set ro=0 after cleanup: #{ex.message}" }
-      end
-    end
-
-    # Step 2: Clear UDC file to disable the gadget
+    # Step 1: Aggressively unbind all UDCs for this gadget
     udc_file = "#{base}/UDC"
     if File.exists?(udc_file)
       Log.debug { "Clearing UDC file: #{udc_file}" }
       begin
         File.write(udc_file, "")
-        sleep 0.5.seconds # Give more time for UDC to clear
+        sleep 0.5.seconds
       rescue ex
         Log.debug { "Failed to clear UDC: #{ex.message}" }
       end
     end
 
-    # Step 2.5: Wait a bit longer to ensure kernel releases resources
-    sleep 0.5.seconds
-
-    # Step 3: Remove symlinks if they exist
-    ["hid.keyboard", "hid.mouse", "hid.usb0", "hid.usb1", "mass_storage.0"].each do |function_name|
-      symlink_path = "#{base}/configs/c.1/#{function_name}"
-      if File.exists?(symlink_path) || File.symlink?(symlink_path)
-        Log.debug { "Removing symlink: #{symlink_path}" }
-        begin
-          File.delete(symlink_path)
-        rescue ex
-          Log.debug { "Failed to remove symlink: #{ex.message}" }
+    # Step 2: Remove all symlinks in all configs
+    configs_dir = "#{base}/configs"
+    if Dir.exists?(configs_dir)
+      Dir.entries(configs_dir).each do |config|
+        next if config == "." || config == ".."
+        config_path = "#{configs_dir}/#{config}"
+        next unless Dir.exists?(config_path)
+        Dir.entries(config_path).each do |entry|
+          next if entry == "." || entry == ".."
+          entry_path = "#{config_path}/#{entry}"
+          if File.symlink?(entry_path) || File.file?(entry_path)
+            begin
+              File.delete(entry_path)
+              Log.debug { "Removed config symlink or file: #{entry_path}" }
+            rescue ex
+              Log.debug { "Failed to remove config symlink or file: #{ex.message}" }
+            end
+          end
         end
       end
     end
 
-    # Step 4: Remove the entire gadget directory tree
+    # Step 3: Remove all function directories
+    functions_dir = "#{base}/functions"
+    if Dir.exists?(functions_dir)
+      Dir.entries(functions_dir).each do |func|
+        next if func == "." || func == ".."
+        func_path = "#{functions_dir}/#{func}"
+        if Dir.exists?(func_path)
+          begin
+            FileUtils.rm_rf(func_path)
+            Log.debug { "Removed function dir: #{func_path}" }
+          rescue ex
+            Log.debug { "Failed to remove function dir: #{ex.message}" }
+          end
+        end
+      end
+    end
+
+    # Step 4: Remove all config directories
+    if Dir.exists?(configs_dir)
+      Dir.entries(configs_dir).each do |config|
+        next if config == "." || config == ".."
+        config_path = "#{configs_dir}/#{config}"
+        if Dir.exists?(config_path)
+          begin
+            FileUtils.rm_rf(config_path)
+            Log.debug { "Removed config dir: #{config_path}" }
+          rescue ex
+            Log.debug { "Failed to remove config dir: #{ex.message}" }
+          end
+        end
+      end
+    end
+
+    # Step 5: Remove the entire gadget directory tree
     if Dir.exists?(base)
       Log.debug { "Removing gadget directory: #{base}" }
       begin
         FileUtils.rm_rf(base)
-        sleep 0.2.seconds # Give more time for cleanup
+        sleep 0.2.seconds
       rescue ex
         Log.debug { "Failed to remove gadget directory: #{ex.message}" }
       end
