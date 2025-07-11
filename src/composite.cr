@@ -24,14 +24,15 @@ module HIDComposite
       end
     end
     {
-      exists: exists,
-      up: up,
-      operstate: operstate,
-      ip: ip,
+      exists:      exists,
+      up:          up,
+      operstate:   operstate,
+      ip:          ip,
       dnsmasq_pid: @@dnsmasq_pid,
-      enabled: @@ecm_enabled
+      enabled:     @@ecm_enabled,
     }
   end
+
   Log = ::Log.for(self)
 
   # State for ECM/usb0 and dnsmasq
@@ -64,6 +65,7 @@ module HIDComposite
     storage_file : String? = nil,
     enable_ecm : Bool = false,
   )
+    Log.debug { "setup_usb_composite_gadget called with enable_mass_storage=#{enable_mass_storage.inspect}, storage_file=#{storage_file.inspect}, enable_ecm=#{enable_ecm.inspect}" }
     gadget = "odroidc2_composite" # Composite gadget name
     base = "/sys/kernel/config/usb_gadget/" + gadget
 
@@ -229,14 +231,14 @@ module HIDComposite
             end
           end
 
-          # 3. Set ro=1, wait
+          # 3. Set ro=0 before setting file (ensure read-write), wait
           if File.exists?(ro_file)
             begin
-              File.write(ro_file, "1")
-              Log.debug { "Set ro=1 before config" }
+              File.write(ro_file, "0")
+              Log.debug { "Set ro=0 before config (read-write)" }
               sleep 0.2.seconds
             rescue error
-              Log.debug { "Could not set ro=1 before config: #{error.message}" }
+              Log.debug { "Could not set ro=0 before config: #{error.message}" }
             end
           end
 
@@ -247,17 +249,6 @@ module HIDComposite
           File.write(file_file, storage_file)
           Log.debug { "Set new LUN file: #{storage_file}" }
           sleep 0.2.seconds
-
-          # 5. Set ro=0, wait
-          if File.exists?(ro_file)
-            begin
-              File.write(ro_file, "0")
-              Log.debug { "Set ro=0 after config" }
-              sleep 0.2.seconds
-            rescue error
-              Log.debug { "Could not set ro=0 after config: #{error.message}" }
-            end
-          end
 
           Log.debug { "Mass storage configured with file: #{storage_file}" }
           Log.debug { "Mass storage configured with file: #{storage_file}" }
@@ -413,7 +404,7 @@ module HIDComposite
         "--dhcp-range=#{dhcp_range}",
         "--dhcp-authoritative",
         "--no-resolv",
-        "--log-facility=/var/log/dnsmasq.usb0.log"
+        "--log-facility=/var/log/dnsmasq.usb0.log",
       ]
       begin
         process = Process.new("dnsmasq", dnsmasq_args)
@@ -508,12 +499,31 @@ module HIDComposite
       end
     end
 
-    # Step 3: Remove all function directories
+    # Step 3: Remove all function directories, with special handling for mass_storage.0
     functions_dir = "#{base}/functions"
     if Dir.exists?(functions_dir)
       Dir.entries(functions_dir).each do |func|
         next if func == "." || func == ".."
         func_path = "#{functions_dir}/#{func}"
+        # Special handling for mass_storage.0: detach LUN file and set ro=1 before removal
+        if func == "mass_storage.0" && Dir.exists?(func_path)
+          ro_file = File.join(func_path, "lun.0/ro")
+          file_file = File.join(func_path, "lun.0/file")
+          begin
+            if File.exists?(file_file)
+              File.write(file_file, "")
+              Log.debug { "Detached mass storage LUN file: #{file_file}" }
+              sleep 0.2.seconds
+            end
+            if File.exists?(ro_file)
+              File.write(ro_file, "1")
+              Log.debug { "Set mass storage LUN to read-only before removal: #{ro_file}" }
+              sleep 0.2.seconds
+            end
+          rescue ex
+            Log.debug { "Failed to detach mass storage LUN: #{ex.message}" }
+          end
+        end
         if Dir.exists?(func_path)
           begin
             FileUtils.rm_rf(func_path)

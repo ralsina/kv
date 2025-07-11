@@ -23,7 +23,6 @@ class KVMManagerV4cr
   @mass_storage : MassStorageManager
   @video_capture : V4crVideoCapture
 
-
   def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, ecm_enabled = false)
     @ecm_enabled = ecm_enabled
     @mass_storage = MassStorageManager.new
@@ -33,10 +32,15 @@ class KVMManagerV4cr
   end
 
   def setup_hid_devices
-    Log.info { "Setting up USB HID composite gadget (keyboard + mouse + mass storage#{@ecm_enabled ? " + ECM/ethernet" : ""})..." }
-
     storage_file = @mass_storage.selected_image
     enable_mass_storage = !!storage_file
+    # Build status string for logging
+    status_str = "Setting up USB HID composite gadget (keyboard + mouse"
+    status_str += " + mass storage" if enable_mass_storage
+    status_str += " + ECM/ethernet" if @ecm_enabled
+    status_str += ")..."
+    Log.info { status_str }
+    Log.info { "Mass storage selected_image: " + (storage_file || "<none>") + ", enable_mass_storage: #{enable_mass_storage}" }
 
     devices = HIDComposite.setup_usb_composite_gadget(
       enable_mass_storage: enable_mass_storage,
@@ -55,7 +59,7 @@ class KVMManagerV4cr
     if enable_mass_storage
       Log.info { "USB mass storage ready: #{storage_file}" }
     else
-      Log.info { "No USB mass storage image attached" }
+      Log.info { "No USB mass storage image attached (detached)" }
     end
   rescue ex
     Log.error { "Failed to setup HID composite gadget: #{ex.message}" }
@@ -257,7 +261,8 @@ class KVMManagerV4cr
       device:  @mouse_device,
     }
 
-    storage_status = @mass_storage.status
+    # Use actual mass storage status from the system
+    storage_status = @mass_storage.actual_status
 
     # Use actual ECM/ethernet status from the system
     ecm_status = HIDComposite.ecm_actual_status
@@ -288,7 +293,6 @@ class KVMManagerV4cr
     HIDComposite.cleanup_all_gadgets
     Log.info { "System cleanup complete." }
   end
-
 
   # ECM/usb0 network interface and DHCP control
   def enable_ecm

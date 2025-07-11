@@ -537,9 +537,13 @@ post "/api/storage/select" do |env|
   manager = GlobalKVM.get_manager
   begin
     body = JSON.parse((env.request.body.try &.gets_to_end).to_s)
-    image = body["image"]?.try(&.as_s)
+    image = body["image"]?
     # Allow null/empty to detach
-    image = nil if image && image.strip.empty?
+    if !image || image.to_s.strip.empty?
+      image = nil
+    else
+      image = image.to_s
+    end
     result = manager.@mass_storage.select_image(image)
     # Re-setup HID devices to apply new image
     manager.setup_hid_devices
