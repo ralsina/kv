@@ -342,90 +342,90 @@
         <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Controls">‹</button>
         <div class="sidebar-content">
             <h2><span class="material-icons">tune</span> Controls</h2>
-            <!-- Text Input -->
-            <div class="compact-section">
-                <h3><span class="material-icons">text_fields</span> Text Input</h3>
-                <form id="text-input-form" style="display: flex; gap: 0.5rem;" onsubmit="event.preventDefault(); sendText();">
-                    <input type="text" id="text-input" placeholder="Type text to send..." maxlength="200">
-                    <button type="submit" style="width: auto;">Send</button>
-                </form>
-                <div style="margin-top: 0.5rem;">
-                    <button onclick="pasteFromClipboard()" class="outline" style="width: 100%;"><span class="material-icons">content_paste</span> Paste Clipboard</button>
+            <details id="section-text" open><summary><span class="material-icons">text_fields</span> Text Input</summary>
+                <div class="compact-section">
+                    <form id="text-input-form" style="display: flex; gap: 0.5rem;" onsubmit="event.preventDefault(); sendText();">
+                        <input type="text" id="text-input" placeholder="Type text to send..." maxlength="200">
+                        <button type="submit" style="width: auto;">Send</button>
+                    </form>
+                    <div style="margin-top: 0.5rem;">
+                        <button onclick="pasteFromClipboard()" class="outline" style="width: 100%;"><span class="material-icons">content_paste</span> Paste Clipboard</button>
+                    </div>
                 </div>
-            </div>
+            </details>
 
-            <!-- Quick Actions -->
-            <div class="compact-section">
-                <h3><span class="material-icons">keyboard_alt</span> Quick Keys</h3>
-                <div class="key-grid">
-                    <button onclick="sendKey('enter')" class="outline">Enter</button>
-                    <button onclick="sendKey('tab')" class="outline">Tab</button>
-                    <button onclick="sendKey('escape')" class="outline">Esc</button>
-                    <button onclick="sendKey('backspace')" class="outline">⌫</button>
-                    <button onclick="sendKey('delete')" class="outline">Del</button>
-                    <button onclick="sendKey('space')" class="outline">Space</button>
+            <details id="section-quickkeys"><summary><span class="material-icons">keyboard_alt</span> Quick Keys</summary>
+                <div class="compact-section">
+                    <div class="key-grid">
+                        <button onclick="sendKey('enter')" class="outline">Enter</button>
+                        <button onclick="sendKey('tab')" class="outline">Tab</button>
+                        <button onclick="sendKey('escape')" class="outline">Esc</button>
+                        <button onclick="sendKey('backspace')" class="outline">⌫</button>
+                        <button onclick="sendKey('delete')" class="outline">Del</button>
+                        <button onclick="sendKey('space')" class="outline">Space</button>
+                    </div>
                 </div>
-            </div>
+            </details>
 
-            <!-- Key Combinations -->
-            <div class="compact-section">
-                <h3><span class="material-icons">shortcut</span> Shortcuts</h3>
-                <div class="combo-grid">
-                    <button onclick="sendCombination(['ctrl'], ['c'])" class="outline">Ctrl+C</button>
-                    <button onclick="sendCombination(['ctrl'], ['v'])" class="outline">Ctrl+V</button>
-                    <button onclick="sendCombination(['ctrl'], ['x'])" class="outline">Ctrl+X</button>
-                    <button onclick="sendCombination(['ctrl'], ['z'])" class="outline">Ctrl+Z</button>
-                    <button onclick="sendCombination(['ctrl'], ['a'])" class="outline">Ctrl+A</button>
-                    <button onclick="sendCombination(['alt'], ['tab'])" class="outline">Alt+Tab</button>
-                    <button onclick="pasteFromClipboard()" class="outline" title="Paste from your clipboard"><span class="material-icons" style="font-size: 0.8em;">content_paste</span> Paste</button>
+            <details id="section-shortcuts"><summary><span class="material-icons">shortcut</span> Shortcuts</summary>
+                <div class="compact-section">
+                    <div class="combo-grid">
+                        <button onclick="sendCombination(['ctrl'], ['c'])" class="outline">Ctrl+C</button>
+                        <button onclick="sendCombination(['ctrl'], ['v'])" class="outline">Ctrl+V</button>
+                        <button onclick="sendCombination(['ctrl'], ['x'])" class="outline">Ctrl+X</button>
+                        <button onclick="sendCombination(['ctrl'], ['z'])" class="outline">Ctrl+Z</button>
+                        <button onclick="sendCombination(['ctrl'], ['a'])" class="outline">Ctrl+A</button>
+                        <button onclick="sendCombination(['alt'], ['tab'])" class="outline">Alt+Tab</button>
+                        <button onclick="pasteFromClipboard()" class="outline" title="Paste from your clipboard"><span class="material-icons" style="font-size: 0.8em;">content_paste</span> Paste</button>
+                    </div>
                 </div>
-            </div>
+            </details>
 
-            <!-- Mouse Controls -->
-            <div class="compact-section">
-                <h3><span class="material-icons">mouse</span> Mouse Buttons</h3>
-                <div class="key-grid">
-                    <button onclick="sendMouseClick('left')" class="outline">L Click</button>
-                    <button onclick="sendMouseClick('right')" class="outline">R Click</button>
-                    <button onclick="sendMouseClick('middle')" class="outline">M Click</button>
+            <details id="section-mouse"><summary><span class="material-icons">mouse</span> Mouse Buttons</summary>
+                <div class="compact-section">
+                    <div class="key-grid">
+                        <button onclick="sendMouseClick('left')" class="outline">L Click</button>
+                        <button onclick="sendMouseClick('right')" class="outline">R Click</button>
+                        <button onclick="sendMouseClick('middle')" class="outline">M Click</button>
+                    </div>
                 </div>
-            </div>
+            </details>
 
-            <!-- Video Controls Section (New) -->
-            <div class="compact-section">
-                <h3><span class="material-icons">videocam</span> Video Controls</h3>
-                <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">
-                    <p><span class="material-icons" style="font-size: 0.9em;">fullscreen</span> <strong>Fullscreen:</strong> F11 or Ctrl+F</p>
-                    <p><span class="material-icons" style="font-size: 0.9em;">photo_camera</span> <strong>Screenshot:</strong> Ctrl+S or Alt+S</p>
-                    <p><span class="material-icons" style="font-size: 0.9em;">mouse</span> <strong>Input Capture:</strong> Click on video</p>
-                    <p><span class="material-icons" style="font-size: 0.9em;">logout</span> <strong>Release Input:</strong> ESC key</p>
+            <details id="section-video"><summary><span class="material-icons">videocam</span> Video Controls</summary>
+                <div class="compact-section">
+                    <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">
+                        <p><span class="material-icons" style="font-size: 0.9em;">fullscreen</span> <strong>Fullscreen:</strong> F11 or Ctrl+F</p>
+                        <p><span class="material-icons" style="font-size: 0.9em;">photo_camera</span> <strong>Screenshot:</strong> Ctrl+S or Alt+S</p>
+                        <p><span class="material-icons" style="font-size: 0.9em;">mouse</span> <strong>Input Capture:</strong> Click on video</p>
+                        <p><span class="material-icons" style="font-size: 0.9em;">logout</span> <strong>Release Input:</strong> ESC key</p>
+                    </div>
                 </div>
-            </div>
+            </details>
 
-            <!-- USB Mass Storage (Disk Image Selection) -->
-            <div class="compact-section">
-                <h3><span class="material-icons">usb</span> Virtual USB Drive</h3>
-                <div id="usb-image-list" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.1); padding: 0.5rem; border-radius: var(--pico-border-radius); font-family: monospace; font-size: 0.9rem;">
-                    Loading disk images...
+            <details id="section-usb"><summary><span class="material-icons">usb</span> Virtual USB Drive</summary>
+                <div class="compact-section">
+                    <div id="usb-image-list" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.1); padding: 0.5rem; border-radius: var(--pico-border-radius); font-family: monospace; font-size: 0.9rem;">
+                        Loading disk images...
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <button id="detach-usb-btn" class="outline" style="display:none;"><span class="material-icons">eject</span> Detach</button>
+                    </div>
                 </div>
-                <div style="margin-top: 0.5rem;">
-                    <button id="detach-usb-btn" class="outline" style="display:none;"><span class="material-icons">eject</span> Detach</button>
-                </div>
-            </div>
+            </details>
 
-            <!-- ECM/Ethernet Controls -->
-            <div class="compact-section">
-                <h3><span class="material-icons">cable</span> Network (ECM)</h3>
-                <div id="ethernet-status-indicator" style="margin-bottom:0.5rem; font-size:0.95em;">
-                    <span class="material-icons" id="ethernet-status-icon">cable</span>
-                    <span id="ethernet-status-label">Checking...</span>
+            <details id="section-ethernet"><summary><span class="material-icons">cable</span> Network (ECM)</summary>
+                <div class="compact-section">
+                    <div id="ethernet-status-indicator" style="margin-bottom:0.5rem; font-size:0.95em;">
+                        <span class="material-icons" id="ethernet-status-icon">cable</span>
+                        <span id="ethernet-status-label">Checking...</span>
+                    </div>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button id="ethernet-enable-btn" class="outline" onclick="setEthernet(true)"><span class="material-icons">lan</span>Enable</button>
+                        <button id="ethernet-disable-btn" class="outline" onclick="setEthernet(false)"><span class="material-icons">lan_off</span>Disable</button>
+                    </div>
+                    <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
                 </div>
-                <div style="display:flex; gap:0.5rem;">
-                    <button id="ethernet-enable-btn" class="outline" onclick="setEthernet(true)"><span class="material-icons">lan</span>Enable</button>
-                    <button id="ethernet-disable-btn" class="outline" onclick="setEthernet(false)"><span class="material-icons">lan_off</span>Disable</button>
-                </div>
-                <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
-            </div>
+            </details>
         </div>
     </aside>
 
@@ -1020,7 +1020,19 @@
         // Sidebar Toggle with Local Storage
         const sidebar = document.getElementById('sidebar');
         const sidebarToggle = document.getElementById('sidebar-toggle');
-        
+
+        // Helper: open sidebar and expand a section
+        function openSidebarSection(sectionId) {
+            sidebar.classList.remove('collapsed');
+            sidebarToggle.innerHTML = '›';
+            saveSidebarState(false);
+            // Collapse all details except the one we want
+            document.querySelectorAll('#sidebar details').forEach(d => {
+                if (d.id === sectionId) d.open = true;
+                else d.open = false;
+            });
+        }
+
         // Load sidebar state from localStorage
         function loadSidebarState() {
             const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
@@ -1031,34 +1043,50 @@
                 sidebar.classList.remove('collapsed');
                 sidebarToggle.innerHTML = '›';
             }
-            // Remove body class management since sidebar now overlays
         }
-        
+
         // Save sidebar state to localStorage
         function saveSidebarState(isCollapsed) {
             localStorage.setItem('sidebarCollapsed', isCollapsed.toString());
         }
-        
+
         sidebarToggle.addEventListener('click', () => {
             const isCollapsed = sidebar.classList.toggle('collapsed');
             sidebarToggle.innerHTML = isCollapsed ? '‹' : '›';
             saveSidebarState(isCollapsed);
-            // Remove body class management since sidebar now overlays
         });
 
         // Close sidebar when clicking outside of it
         document.addEventListener('click', (e) => {
-            // Don't close if clicking on the sidebar itself or the toggle button
             if (!sidebar.contains(e.target) && e.target !== sidebarToggle) {
-                // Only close if sidebar is currently open
                 if (!sidebar.classList.contains('collapsed')) {
                     sidebar.classList.add('collapsed');
                     sidebarToggle.innerHTML = '‹';
-                    saveSidebarState(true); // Save the collapsed state
-                    // Remove body class management since sidebar now overlays
+                    saveSidebarState(true);
                 }
             }
         });
+
+        // Status bar icon click handlers to open sidebar to correct section
+        document.getElementById('keyboard-status').addEventListener('click', e => {
+            e.stopPropagation();
+            sidebar.classList.remove('collapsed');
+            sidebarToggle.innerHTML = '›';
+            saveSidebarState(false);
+            // Open all keyboard-related sections
+            ['section-text','section-quickkeys','section-shortcuts'].forEach(id => {
+                const d = document.getElementById(id);
+                if (d) d.open = true;
+            });
+            // Collapse others
+            ['section-mouse','section-video','section-usb','section-ethernet'].forEach(id => {
+                const d = document.getElementById(id);
+                if (d) d.open = false;
+            });
+        });
+        document.getElementById('mouse-status').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-mouse'); });
+        document.getElementById('storage-status').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-usb'); });
+        document.getElementById('ethernet-status-bar').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-ethernet'); });
         
         // Fullscreen toggle function
         function toggleFullscreen() {
