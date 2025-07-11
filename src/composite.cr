@@ -4,6 +4,26 @@ require "file_utils"
 module HIDComposite
   Log = ::Log.for(self)
 
+  # State for ECM/usb0 and dnsmasq
+  @@ecm_enabled : Bool = false
+  @@dnsmasq_pid : Int64? = nil
+  @@ethernet_ifname : String = "usb0"
+
+  # Class method for ECM enabled state
+  def self.ecm_enabled : Bool
+    @@ecm_enabled
+  end
+
+  # Class method for ethernet interface name
+  def self.ethernet_ifname : String
+    @@ethernet_ifname
+  end
+
+  # Class method for dnsmasq PID
+  def self.dnsmasq_pid : Int64?
+    @@dnsmasq_pid
+  end
+
   def self.setup_usb_composite_gadget(
     vendor_id : String = "0x16c0",
     product_id : String = "0x048a",
@@ -12,6 +32,7 @@ module HIDComposite
     serial : String = "fedcba9876543212",
     enable_mass_storage : Bool = false,
     storage_file : String? = nil,
+    enable_ecm : Bool = false,
   )
     gadget = "odroidc2_composite" # Composite gadget name
     base = "/sys/kernel/config/usb_gadget/" + gadget
@@ -57,6 +78,17 @@ module HIDComposite
     # Create mass storage function if enabled
     if enable_mass_storage && storage_file
       FileUtils.mkdir_p "#{base}/functions/mass_storage.0"
+    end
+
+    # Create ECM (Ethernet) function only if enabled
+    if enable_ecm
+      FileUtils.mkdir_p "#{base}/functions/ecm.usb0"
+      # Set MAC addresses (use fixed or random, but must be different)
+      dev_mac = "02:00:00:00:00:01"
+      host_mac = "02:00:00:00:00:02"
+      File.write "#{base}/functions/ecm.usb0/dev_addr", dev_mac
+      File.write "#{base}/functions/ecm.usb0/host_addr", host_mac
+      File.write "#{base}/functions/ecm.usb0/ifname", @@ethernet_ifname
     end
 
     # Write config files
@@ -245,6 +277,14 @@ module HIDComposite
       FileUtils.ln_s "#{base}/functions/hid.mouse", mouse_dest
     end
 
+    # ECM symlink only if enabled
+    if enable_ecm
+      ecm_dest = "#{base}/configs/c.1/ecm.usb0"
+      unless File.exists?(ecm_dest) || File.symlink?(ecm_dest)
+        FileUtils.ln_s "#{base}/functions/ecm.usb0", ecm_dest
+      end
+    end
+
     # Create mass storage symlink if it was successfully configured
     if mass_storage_enabled
       storage_dest = "#{base}/configs/c.1/mass_storage.0"
@@ -308,16 +348,72 @@ module HIDComposite
       end
     end
 
-    {keyboard: keyboard_device, mouse: mouse_device}
-  rescue ex
-    Log.error { "Error setting up HID composite gadget: #{ex.message}" }
-    # Cleanup on error
-    begin
-      cleanup_existing_gadget(base) unless base.nil?
-    rescue
-      # Ignore cleanup errors
+    # ECM/usb0 and dnsmasq are not started by default
+    @@ecm_enabled = false
+    @@dnsmasq_pid = nil
+    {keyboard: keyboard_device, mouse: mouse_device, ethernet: "/dev/usb0", ethernet_ifname: @@ethernet_ifname, dnsmasq_pid: nil}
+  end
+
+  # Bring up ECM/usb0 and start dnsmasq (idempotent)
+  def self.enable_ecm_interface
+    return if @@ecm_enabled
+    ethernet_ip = "192.168.7.1/24"
+    dhcp_range = "192.168.7.2,192.168.7.10,12h"
+    # Wait for /sys/class/net/usb0 to appear (timeout ~3s)
+    found_usb0 = false
+    10.times do |_|
+      if File.exists?("/sys/class/net/#{@@ethernet_ifname}")
+        found_usb0 = true
+        break
+      end
+      ::sleep(0.3.seconds)
     end
-    raise ex
+    if found_usb0
+      Log.debug { "Bringing up #{@@ethernet_ifname} and assigning IP #{ethernet_ip}" }
+      system("ip link set #{@@ethernet_ifname} up")
+      system("ip addr add #{ethernet_ip} dev #{@@ethernet_ifname}")
+
+      # Start dnsmasq for DHCP on usb0
+      dnsmasq_args = [
+        "--interface=#{@@ethernet_ifname}",
+        "--bind-interfaces",
+        "--except-interface=lo",
+        "--dhcp-range=#{dhcp_range}",
+        "--dhcp-authoritative",
+        "--no-resolv",
+        "--log-facility=/var/log/dnsmasq.usb0.log"
+      ]
+      begin
+        process = Process.new("dnsmasq", dnsmasq_args)
+        @@dnsmasq_pid = process.pid
+        @@ecm_enabled = true
+        Log.debug { "Started dnsmasq for #{@@ethernet_ifname} with pid #{process.pid}" }
+      rescue ex
+        Log.error { "Failed to start dnsmasq: #{ex.message}" }
+      end
+    else
+      Log.error { "usb0 interface did not appear after gadget activation" }
+    end
+  end
+
+  # Bring down ECM/usb0 and kill dnsmasq
+  def self.disable_ecm_interface
+    return unless @@ecm_enabled
+    Log.debug { "Tearing down #{@@ethernet_ifname} and killing dnsmasq if running..." }
+    # Bring down interface
+    system("ip addr flush dev #{@@ethernet_ifname}")
+    system("ip link set #{@@ethernet_ifname} down")
+    # Kill dnsmasq if pid provided
+    if pid = @@dnsmasq_pid
+      begin
+        Process.signal(Signal::TERM, pid)
+        Log.debug { "Killed dnsmasq (pid #{pid})" }
+      rescue ex
+        Log.error { "Failed to kill dnsmasq: #{ex.message}" }
+      end
+      @@dnsmasq_pid = nil
+    end
+    @@ecm_enabled = false
   end
 
   def self.cleanup_all_gadgets

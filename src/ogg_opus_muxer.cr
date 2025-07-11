@@ -64,7 +64,7 @@ class OggOpusMuxer
     opus_head[15] = ((sample_rate >> 24) & 0xFF).to_u8
     opus_head[16] = 0_u8 # output gain LSB
     opus_head[17] = 0_u8 # output gain MSB
-    opus_head[18] = 0 # Channel mapping family
+    opus_head[18] = 0    # Channel mapping family
 
     Log.info { "OpusHead packet: #{opus_head.hexstring}" }
     write_packet_internal(opus_head, 0, b_o_s: true)
@@ -128,7 +128,7 @@ class OggOpusMuxer
       write_page(page)
     end
     LibOgg.ogg_stream_clear(@os_ptr)
-    LibC.free(@os_ptr.as(Void*)) # Free the allocated memory
+    LibC.free(@os_ptr.as(Void*))                   # Free the allocated memory
     @os_ptr = Pointer(LibOgg::OggStreamState).null # Mark as freed
   end
 end

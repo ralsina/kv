@@ -255,11 +255,18 @@ class KVMManagerV4cr
 
     storage_status = @mass_storage.status
 
+    ecm_status = {
+      enabled:     HIDComposite.ecm_enabled,
+      ifname:      HIDComposite.ethernet_ifname,
+      dnsmasq_pid: HIDComposite.dnsmasq_pid,
+    }
+
     {
       video:    video_status,
       keyboard: keyboard_status,
       mouse:    mouse_status,
       storage:  storage_status,
+      ecm:      ecm_status,
     }
   end
 
@@ -279,6 +286,31 @@ class KVMManagerV4cr
     Log.info { "Performing full system cleanup before startup..." }
     HIDComposite.cleanup_all_gadgets
     Log.info { "System cleanup complete." }
+  end
+
+  # ECM/usb0 network interface and DHCP control
+  def enable_ecm
+    HIDComposite.enable_ecm_interface
+    {success: true, message: "ECM/usb0 interface and DHCP enabled"}
+  rescue ex
+    Log.error { "Failed to enable ECM/usb0: #{ex.message}" }
+    {success: false, message: "Error enabling ECM/usb0: #{ex.message}"}
+  end
+
+  def disable_ecm
+    HIDComposite.disable_ecm_interface
+    {success: true, message: "ECM/usb0 interface and DHCP disabled"}
+  rescue ex
+    Log.error { "Failed to disable ECM/usb0: #{ex.message}" }
+    {success: false, message: "Error disabling ECM/usb0: #{ex.message}"}
+  end
+
+  def ecm_status
+    {
+      enabled:     HIDComposite.ecm_enabled,
+      ifname:      HIDComposite.ethernet_ifname,
+      dnsmasq_pid: HIDComposite.dnsmasq_pid,
+    }
   end
 
   private def get_server_port

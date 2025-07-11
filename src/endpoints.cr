@@ -127,8 +127,6 @@ get "/" do
   render "templates/app.ecr"
 end
 
-
-
 post "/api/video/start" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.get_manager
@@ -548,4 +546,26 @@ post "/api/storage/select" do |env|
   rescue ex
     {success: false, message: "Invalid request: #{ex.message}"}.to_json
   end
+end
+
+# ECM/ethernet network interface endpoints
+post "/api/ethernet/enable" do |env|
+  env.response.content_type = "application/json"
+  manager = GlobalKVM.get_manager
+  result = manager.enable_ecm
+  result.to_json
+end
+
+post "/api/ethernet/disable" do |env|
+  env.response.content_type = "application/json"
+  manager = GlobalKVM.get_manager
+  result = manager.disable_ecm
+  result.to_json
+end
+
+get "/api/ethernet/status" do |env|
+  env.response.content_type = "application/json"
+  manager = GlobalKVM.get_manager
+  status = manager.ecm_status
+  status.to_json
 end
