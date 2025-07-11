@@ -528,8 +528,12 @@ end
 get "/api/storage/images" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.get_manager
-  images = manager.@mass_storage.available_images
-  {success: true, images: images, selected: manager.@mass_storage.selected_image}.to_json
+  images = manager.@mass_storage.available_images.map { |img|
+    File.basename(img)
+  }
+  selected = manager.@mass_storage.selected_image
+  selected = File.basename(selected) if selected
+  {success: true, images: images, selected: selected}.to_json
 end
 
 post "/api/storage/select" do |env|
@@ -544,7 +548,13 @@ post "/api/storage/select" do |env|
     else
       image = image.to_s
     end
-    result = manager.@mass_storage.select_image(image)
+    # Use KVMManager to ensure decompression and get the image to mount
+    decompress_result = manager.ensure_decompressed_image(image)
+    unless decompress_result[:success]
+      next({success: false, message: decompress_result[:message]}.to_json)
+    end
+    selected_img = decompress_result[:raw_image]
+    result = manager.@mass_storage.select_image(selected_img)
     # Re-setup HID devices to apply new image
     manager.setup_hid_devices
     result.to_json
@@ -554,6 +564,36 @@ post "/api/storage/select" do |env|
 end
 
 # ECM/ethernet network interface endpoints
+require "mime/multipart"
+
+# Disk image upload endpoint
+post "/api/storage/upload" do |env|
+  env.response.content_type = "application/json"
+  begin
+    # Get the uploaded file from the form field named "file"
+    upload = env.params.files["file"]?
+    unless upload && upload.tempfile
+      env.response.status_code = 400
+      next({success: false, message: "No file uploaded"}.to_json)
+    end
+
+    orig_filename = upload.filename.to_s
+    temp_file = File.tempfile("upload") { |file_handle| IO.copy(upload.tempfile, file_handle) }
+
+    manager = GlobalKVM.get_manager
+    result = manager.upload_and_decompress_image(temp_file.path, orig_filename)
+    temp_file.delete
+    if result[:success]
+      {success: true, message: result[:message], filename: result[:filename]}.to_json
+    else
+      env.response.status_code = 500
+      {success: false, message: result[:message]}.to_json
+    end
+  rescue ex
+    env.response.status_code = 500
+    {success: false, message: "Upload failed: #{ex.message}"}.to_json
+  end
+end
 post "/api/ethernet/enable" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.get_manager

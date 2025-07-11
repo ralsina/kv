@@ -410,6 +410,12 @@
                     <div style="margin-top: 0.5rem;">
                         <button id="detach-usb-btn" class="outline" style="display:none;"><span class="material-icons">eject</span> Detach</button>
                     </div>
+                    <form id="usb-upload-form" style="margin-top:0.5rem;display:flex;gap:0.5em;align-items:center;" onsubmit="event.preventDefault(); uploadUsbImage();">
+                        <input type="file" id="usb-upload-input" accept=".img,.iso,.bin,.raw,.qcow2,.vhd,.vmdk,.dmg,.img.gz,.img.xz,.img.bz2,.zip,.gz,.xz,.bz2" style="display:none;" required>
+                        <button type="button" id="usb-upload-btn" class="outline"><span class="material-icons">upload</span> Upload</button>
+                        <progress id="usb-upload-progress" value="0" max="100" style="width:80px;display:none;margin-left:0.5em;"></progress>
+                    </form>
+                    <div id="usb-upload-status" style="font-size:0.85em;color:#4ade80;margin-top:0.2em;"></div>
                 </div>
             </details>
 
@@ -954,32 +960,87 @@
         });
 
 
-        // USB Mass Storage (Disk Image Selection)
+        // USB Mass Storage (Disk Image Selection & Upload)
+        function uploadUsbImage() {
+            const input = document.getElementById('usb-upload-input');
+            const status = document.getElementById('usb-upload-status');
+            const progress = document.getElementById('usb-upload-progress');
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            status.textContent = 'Uploading...';
+            progress.value = 0;
+            progress.style.display = '';
+            const formData = new FormData();
+            formData.append('file', file);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/storage/upload', true);
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progress.value = percent;
+                }
+            };
+            xhr.onload = function() {
+                progress.style.display = 'none';
+                let data = {};
+                try { data = JSON.parse(xhr.responseText); } catch {}
+                if (xhr.status === 200 && data.success) {
+                    status.textContent = 'Upload successful: ' + data.filename;
+                    input.value = '';
+                    setTimeout(() => { status.textContent = ''; }, 2000);
+                    refreshUsbImages();
+                } else {
+                    status.textContent = 'Upload failed: ' + (data.message || 'Unknown error');
+                }
+            };
+            xhr.onerror = function() {
+                progress.style.display = 'none';
+                status.textContent = 'Upload failed: Network error';
+            };
+            xhr.send(formData);
+        }
+
+        // Show file chooser when clicking Upload button
+        document.addEventListener('DOMContentLoaded', () => {
+            const uploadBtn = document.getElementById('usb-upload-btn');
+            const uploadInput = document.getElementById('usb-upload-input');
+            uploadBtn.addEventListener('click', () => {
+                uploadInput.value = '';
+                uploadInput.click();
+            });
+            uploadInput.addEventListener('change', () => {
+                if (uploadInput.files && uploadInput.files.length > 0) {
+                    uploadUsbImage();
+                }
+            });
+        });
         function refreshUsbImages() {
             fetch('/api/storage/images')
                 .then(response => response.json())
                 .then(data => {
                     const container = document.getElementById('usb-image-list');
-                    const detachBtn = document.getElementById('detach-usb-btn');
                     if (data.success && data.images) {
                         if (data.images.length === 0) {
                             container.innerHTML = '<em>No disk images found in ./disk-images</em>';
-                            detachBtn.style.display = 'none';
                         } else {
                             container.innerHTML = data.images.map(img => {
-                                const selected = (img === data.selected) ? ' (selected)' : '';
-                                return `<div style=\"padding:2px 0;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${img===data.selected?'font-weight:bold;color:#4ade80;':''}\" onclick=\"selectUsbImage('${img}')\" title=\"${img}\">${img}${selected}</div>`;
+                                const isSelected = (img === data.selected);
+                                const icon = isSelected ? 'eject' : 'play_arrow';
+                                const btnClass = isSelected ? 'detach-usb-btn' : 'mount-usb-btn';
+                                const btnTitle = isSelected ? 'Detach' : 'Mount';
+                                return `<div style=\"display:flex;align-items:center;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isSelected?'font-weight:bold;color:#4ade80;':''}\">` +
+                                    `<button class=\"outline ${btnClass}\" style=\"margin-right:0.5em;min-width:32px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;\" title=\"${btnTitle}\" onclick=\"${isSelected?`detachUsbImage()`:`selectUsbImage('${img}')`}\">` +
+                                    `<span class=\"material-icons\">${icon}</span></button>` +
+                                    `<span title=\"${img}\">${img}${isSelected ? ' (selected)' : ''}</span>` +
+                                    `</div>`;
                             }).join('');
-                            detachBtn.style.display = data.selected ? '' : 'none';
                         }
                     } else {
                         container.innerHTML = '<em>Error loading disk images</em>';
-                        detachBtn.style.display = 'none';
                     }
                 })
                 .catch(error => {
                     document.getElementById('usb-image-list').innerHTML = '<em>Error loading disk images</em>';
-                    document.getElementById('detach-usb-btn').style.display = 'none';
                 });
         }
 
@@ -991,6 +1052,14 @@
             })
             .then(() => { setTimeout(() => { refreshUsbImages(); updateStatus(); }, 300); })
             .catch(() => { refreshUsbImages(); });
+        }
+
+        function detachUsbImage() {
+            fetch('/api/storage/select', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({image: null})
+            }).then(() => { setTimeout(() => { refreshUsbImages(); updateStatus(); }, 300); });
         }
 
         document.addEventListener('DOMContentLoaded', () => {

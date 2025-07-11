@@ -4,9 +4,67 @@ require "./composite"
 require "./mass_storage_manager"
 require "./video_capture"
 require "kemal"
+require "file_utils"
 
 # Updated KVM manager using V4cr for video capture instead of FFmpeg
 class KVMManagerV4cr
+  # Upload and decompress a disk image, always storing as .img
+  def upload_and_decompress_image(uploaded_path : String, orig_filename : String) : {success: Bool, message: String, filename: String?}
+    disk_images_dir = "disk-images"
+    FileUtils.mkdir_p(disk_images_dir) unless Dir.exists?(disk_images_dir)
+
+    # Basic filename sanitization
+    base_name = File.basename(orig_filename.gsub(/[^a-zA-Z0-9._-]/, "_"))
+    base_name = base_name.sub(/\.(img|raw|iso|qcow2|gz|bz2|xz|zip)$/i, "")
+    img_filename = base_name + ".img"
+    dest_path = File.join(disk_images_dir, img_filename)
+
+    # Detect compression type by extension and decompress
+    ext = File.extname(orig_filename).downcase
+    decompress_cmd = nil
+    case ext
+    when ".gz"
+      decompress_cmd = "gunzip -c '#{uploaded_path}' > '#{dest_path}'"
+    when ".bz2"
+      decompress_cmd = "bunzip2 -c '#{uploaded_path}' > '#{dest_path}'"
+    when ".xz"
+      decompress_cmd = "xz -d -c '#{uploaded_path}' > '#{dest_path}'"
+    when ".zip"
+      decompress_cmd = "unzip -p '#{uploaded_path}' > '#{dest_path}'"
+    when ".qcow2"
+      decompress_cmd = "qemu-img convert -O raw '#{uploaded_path}' '#{dest_path}'"
+    else
+      # Assume raw or .img, just move/rename
+      File.rename(uploaded_path, dest_path)
+    end
+
+    if decompress_cmd
+      Process.run(decompress_cmd, shell: true)
+      unless File.exists?(dest_path) && File.size(dest_path) > 0
+        return {success: false, message: "Decompression failed", filename: nil}
+      end
+    end
+
+    {success: true, message: "File uploaded and decompressed as .img", filename: img_filename}
+  rescue ex
+    {success: false, message: "Upload failed: #{ex.message}", filename: nil}
+  end
+
+  # Ensure the image is a raw .img file, return the raw image filename to use for mounting
+  def ensure_decompressed_image(image : String?) : {success: Bool, raw_image: String?, message: String?}
+    return {success: true, raw_image: nil, message: nil} unless image
+    disk_images_dir = "disk-images"
+    # The image should already be decompressed to .img during upload
+    # Just verify its existence and return the path
+    raw_path = File.join(disk_images_dir, image)
+    unless File.exists?(raw_path)
+      return {success: false, raw_image: nil, message: "Image file not found: #{image}. It might not have been uploaded or decompressed correctly."}
+    end
+    {success: true, raw_image: image, message: nil}
+  rescue ex
+    {success: false, raw_image: nil, message: ex.message}
+  end
+
   Log = ::Log.for(self)
 
   @keyboard_enabled = false
