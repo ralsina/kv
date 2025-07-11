@@ -11,6 +11,7 @@ class KVMManagerV4cr
 
   @keyboard_enabled = false
   @mouse_enabled = false
+  @ecm_enabled : Bool
   @video_device : String
   @audio_device : String
   @keyboard_device : String = ""
@@ -22,7 +23,9 @@ class KVMManagerV4cr
   @mass_storage : MassStorageManager
   @video_capture : V4crVideoCapture
 
-  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30)
+
+  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, ecm_enabled = false)
+    @ecm_enabled = ecm_enabled
     @mass_storage = MassStorageManager.new
     @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
     setup_hid_devices
@@ -30,14 +33,15 @@ class KVMManagerV4cr
   end
 
   def setup_hid_devices
-    Log.info { "Setting up USB HID composite gadget (keyboard + mouse + mass storage)..." }
+    Log.info { "Setting up USB HID composite gadget (keyboard + mouse + mass storage#{@ecm_enabled ? " + ECM/ethernet" : ""})..." }
 
     storage_file = @mass_storage.selected_image
     enable_mass_storage = !!storage_file
 
     devices = HIDComposite.setup_usb_composite_gadget(
       enable_mass_storage: enable_mass_storage,
-      storage_file: storage_file
+      storage_file: storage_file,
+      enable_ecm: @ecm_enabled
     )
 
     @keyboard_device = devices[:keyboard]
@@ -286,8 +290,14 @@ class KVMManagerV4cr
     Log.info { "System cleanup complete." }
   end
 
+
   # ECM/usb0 network interface and DHCP control
   def enable_ecm
+    unless @ecm_enabled
+      Log.info { "Enabling ECM/ethernet gadget and reinitializing composite device..." }
+      @ecm_enabled = true
+      setup_hid_devices
+    end
     HIDComposite.enable_ecm_interface
     {success: true, message: "ECM/usb0 interface and DHCP enabled"}
   rescue ex
@@ -296,6 +306,11 @@ class KVMManagerV4cr
   end
 
   def disable_ecm
+    if @ecm_enabled
+      Log.info { "Disabling ECM/ethernet gadget and reinitializing composite device..." }
+      @ecm_enabled = false
+      setup_hid_devices
+    end
     HIDComposite.disable_ecm_interface
     {success: true, message: "ECM/usb0 interface and DHCP disabled"}
   rescue ex
@@ -305,7 +320,7 @@ class KVMManagerV4cr
 
   def ecm_status
     {
-      enabled:     HIDComposite.ecm_enabled,
+      enabled:     @ecm_enabled,
       ifname:      HIDComposite.ethernet_ifname,
       dnsmasq_pid: HIDComposite.dnsmasq_pid,
     }

@@ -88,7 +88,7 @@ module HIDComposite
       host_mac = "02:00:00:00:00:02"
       File.write "#{base}/functions/ecm.usb0/dev_addr", dev_mac
       File.write "#{base}/functions/ecm.usb0/host_addr", host_mac
-      File.write "#{base}/functions/ecm.usb0/ifname", @@ethernet_ifname
+      # File.write "#{base}/functions/ecm.usb0/ifname", @@ethernet_ifname
     end
 
     # Write config files
@@ -417,6 +417,9 @@ module HIDComposite
   end
 
   def self.cleanup_all_gadgets
+    # Always bring down ECM/usb0 and kill dnsmasq before removing gadgets
+    disable_ecm_interface
+
     # Clean up any existing gadgets in the system
     gadget_base = "/sys/kernel/config/usb_gadget"
     return unless Dir.exists?(gadget_base)
