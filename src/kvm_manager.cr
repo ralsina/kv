@@ -255,18 +255,16 @@ class KVMManagerV4cr
 
     storage_status = @mass_storage.status
 
-    ecm_status = {
-      enabled:     HIDComposite.ecm_enabled,
-      ifname:      HIDComposite.ethernet_ifname,
-      dnsmasq_pid: HIDComposite.dnsmasq_pid,
-    }
-
     {
       video:    video_status,
       keyboard: keyboard_status,
       mouse:    mouse_status,
       storage:  storage_status,
-      ecm:      ecm_status,
+      ecm: {
+        enabled:     HIDComposite.ecm_enabled,
+        ifname:      HIDComposite.ethernet_ifname,
+        dnsmasq_pid: HIDComposite.dnsmasq_pid,
+      },
     }
   end
 

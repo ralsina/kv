@@ -347,7 +347,8 @@ end
 get "/api/status" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.get_manager
-  manager.status.to_json
+  status = manager.status
+  status.to_json
 end
 
 get "/api/time" do |env|
@@ -561,11 +562,4 @@ post "/api/ethernet/disable" do |env|
   manager = GlobalKVM.get_manager
   result = manager.disable_ecm
   result.to_json
-end
-
-get "/api/ethernet/status" do |env|
-  env.response.content_type = "application/json"
-  manager = GlobalKVM.get_manager
-  status = manager.ecm_status
-  status.to_json
 end

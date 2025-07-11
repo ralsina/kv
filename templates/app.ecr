@@ -222,11 +222,11 @@
             align-items: center;
         }
         .video-container.fullscreen .video-stream {
-            max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
-            object-fit: contain;
+            width: 100vw;
+            height: 100vh;
+            max-width: 100vw;
+            max-height: 100vh;
+            object-fit: cover;
         }
         .video-container.fullscreen .video-controls {
             opacity: 0;
@@ -412,6 +412,20 @@
                     <button id="detach-usb-btn" class="outline" style="display:none;"><span class="material-icons">eject</span> Detach</button>
                 </div>
             </div>
+
+            <!-- ECM/Ethernet Controls -->
+            <div class="compact-section">
+                <h3><span class="material-icons">cable</span> Network (ECM)</h3>
+                <div id="ethernet-status-indicator" style="margin-bottom:0.5rem; font-size:0.95em;">
+                    <span class="material-icons" id="ethernet-status-icon">cable</span>
+                    <span id="ethernet-status-label">Checking...</span>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                    <button id="ethernet-enable-btn" class="outline" onclick="setEthernet(true)"><span class="material-icons">lan</span>Enable</button>
+                    <button id="ethernet-disable-btn" class="outline" onclick="setEthernet(false)"><span class="material-icons">lan_off</span>Disable</button>
+                </div>
+                <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
+            </div>
         </div>
     </aside>
 
@@ -429,10 +443,11 @@
             <div class="video-status-bar" id="video-status-bar">
                 <span id="latency-indicator"><span class="material-icons">speed</span>--ms</span>
                 <span id="fps-indicator"><span class="material-icons">timer</span>FPS:--</span>
-                <span id="video-status"><span class="material-icons">videocam</span>Video:--</span>
-                <span id="keyboard-status"><span class="material-icons">keyboard</span>KB:✗</span>
-                <span id="mouse-status"><span class="material-icons">mouse</span>Mouse:✗</span>
-                <span id="storage-status"><span class="material-icons">usb</span>USB:✗</span>
+                <span id="video-status"><span class="material-icons">monitor</span>Video:--</span>
+                <span id="keyboard-status"><span class="material-icons">keyboard</span></span>
+                <span id="mouse-status"><span class="material-icons">mouse</span></span>
+                <span id="storage-status"><span class="material-icons">usb</span></span>
+                <span id="ethernet-status-bar"><span class="material-icons">cable</span></span>
                 <span id="input-status"></span>
                 <span id="controls-hint" style="display:none;" class="good"><span class="material-icons">tips_and_updates</span>Tip: Hover over video for controls</span>
             </div>
@@ -470,6 +485,21 @@
     </main>
 
     <script>
+        // ECM/Ethernet enable/disable controls
+        function setEthernet(enable) {
+            fetch('/api/ethernet/' + (enable ? 'enable' : 'disable'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Optionally show a notification or update status immediately
+                updateStatus();
+            })
+            .catch(error => {
+                console.error('Failed to set ethernet:', error);
+            });
+        }
         let audioStream = null;
         let audioLatencyInterval = null;
 
@@ -571,9 +601,46 @@
         }
 
         function updateStatus() {
+            // ECM/Ethernet sidebar indicator and controls (eth must be defined only once after data is fetched)
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
+                    // ECM/Ethernet sidebar indicator and controls
+                    const eth = data.ecm || data.ethernet;
+                    const ethStatus = document.getElementById('ethernet-status-label');
+                    const ethIcon = document.getElementById('ethernet-status-icon');
+                    const enableBtn = document.getElementById('ethernet-enable-btn');
+                    const disableBtn = document.getElementById('ethernet-disable-btn');
+                    const ethIfname = document.getElementById('ethernet-ifname');
+                    if (ethStatus && ethIcon && enableBtn && disableBtn) {
+                        if (eth) {
+                            if (eth.enabled) {
+                                ethStatus.textContent = 'Enabled';
+                                ethIcon.textContent = 'lan';
+                                ethIcon.className = 'material-icons good';
+                                enableBtn.disabled = true;
+                                disableBtn.disabled = false;
+                            } else {
+                                ethStatus.textContent = 'Disabled';
+                                ethIcon.textContent = 'lan_off';
+                                ethIcon.className = 'material-icons bad';
+                                enableBtn.disabled = false;
+                                disableBtn.disabled = true;
+                            }
+                            if (eth.ifname) {
+                                ethIfname.textContent = 'Interface: ' + eth.ifname + (eth.ip ? ' (' + eth.ip + ')' : '');
+                            } else {
+                                ethIfname.textContent = '';
+                            }
+                        } else {
+                            ethStatus.textContent = 'Unavailable';
+                            ethIcon.textContent = 'cable';
+                            ethIcon.className = 'material-icons';
+                            enableBtn.disabled = false;
+                            disableBtn.disabled = false;
+                            ethIfname.textContent = '';
+                        }
+                    }
                     const videoStatus = document.getElementById('video-status');
                     const keyboardStatus = document.getElementById('keyboard-status');
                     const mouseStatus = document.getElementById('mouse-status');
@@ -590,21 +657,70 @@
                     // Update FPS indicator with server-reported FPS
                     updateFpsIndicator(data.video.actual_fps);
 
-                    keyboardStatus.innerHTML = '<span class="material-icons">keyboard</span>' + (data.keyboard.enabled ? 'KB:✓' : 'KB:✗');
-                    keyboardStatus.classList.toggle('good', data.keyboard.enabled);
+                    // ECM/Ethernet status bar (icon-only, color for status)
+                    const ethBar = document.getElementById('ethernet-status-bar');
+                    if (ethBar) {
+                        if (eth) {
+                            if (eth.enabled) {
+                                ethBar.innerHTML = '<span class="material-icons good">lan</span>';
+                                ethBar.className = 'good';
+                            } else {
+                                ethBar.innerHTML = '<span class="material-icons bad">lan_off</span>';
+                                ethBar.className = 'bad';
+                            }
+                        } else {
+                            ethBar.innerHTML = '<span class="material-icons">cable</span>';
+                            ethBar.className = '';
+                        }
+                    }
 
-                    mouseStatus.innerHTML = '<span class="material-icons">mouse</span>' + (data.mouse.enabled ? 'Mouse:✓' : 'Mouse:✗');
-                    mouseStatus.classList.toggle('good', data.mouse.enabled);
+                    // Keyboard status (icon only)
+                    if (data.keyboard.enabled) {
+                        keyboardStatus.innerHTML = '<span class="material-icons good">keyboard</span>';
+                        keyboardStatus.className = 'good';
+                    } else {
+                        keyboardStatus.innerHTML = '<span class="material-icons bad">keyboard</span>';
+                        keyboardStatus.className = 'bad';
+                    }
 
-                    storageStatus.innerHTML = '<span class="material-icons">usb</span>' + ((data.storage && data.storage.enabled) ? 'USB:✓' : 'USB:✗');
-                    storageStatus.classList.toggle('good', data.storage && data.storage.enabled);
+                    // Mouse status (icon only)
+                    if (data.mouse.enabled) {
+                        mouseStatus.innerHTML = '<span class="material-icons good">mouse</span>';
+                        mouseStatus.className = 'good';
+                    } else {
+                        mouseStatus.innerHTML = '<span class="material-icons bad">mouse</span>';
+                        mouseStatus.className = 'bad';
+                    }
+
+                    // USB status (icon only)
+                    if (data.storage && data.storage.enabled) {
+                        storageStatus.innerHTML = '<span class="material-icons good">usb</span>';
+                        storageStatus.className = 'good';
+                    } else {
+                        storageStatus.innerHTML = '<span class="material-icons bad">usb</span>';
+                        storageStatus.className = 'bad';
+                    }
+
+                    // ...existing code...
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    document.getElementById('video-status').innerHTML = '<span class="material-icons">error</span> Error';
-                    document.getElementById('keyboard-status').innerHTML = '<span class="material-icons">keyboard</span>KB:✗';
-                    document.getElementById('mouse-status').innerHTML = '<span class="material-icons">mouse</span>Mouse:✗';
-                    document.getElementById('storage-status').innerHTML = '<span class="material-icons">usb</span>USB:✗';
+                    document.getElementById('video-status').innerHTML = '<span class="material-icons">monitor</span>';
+                    document.getElementById('keyboard-status').innerHTML = '<span class="material-icons">keyboard</span>';
+                    document.getElementById('mouse-status').innerHTML = '<span class="material-icons">mouse</span>';
+                    document.getElementById('storage-status').innerHTML = '<span class="material-icons">usb</span>';
+
+                    const ethStatus = document.getElementById('ethernet-status-label');
+                    const ethIcon = document.getElementById('ethernet-status-icon');
+                    const enableBtn = document.getElementById('ethernet-enable-btn');
+                    const disableBtn = document.getElementById('ethernet-disable-btn');
+                    if (ethStatus && ethIcon && enableBtn && disableBtn) {
+                        ethStatus.textContent = 'Error';
+                        ethIcon.textContent = 'error';
+                        ethIcon.className = 'material-icons bad';
+                        enableBtn.disabled = false;
+                        disableBtn.disabled = false;
+                    }
                 });
         }
 
@@ -943,7 +1059,7 @@
                 }
             }
         });
-
+        
         // Fullscreen toggle function
         function toggleFullscreen() {
             const videoContainer = document.querySelector('.video-container');
