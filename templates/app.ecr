@@ -1028,10 +1028,23 @@
             saveSidebarState(false);
             // Collapse all details except the one we want
             document.querySelectorAll('#sidebar details').forEach(d => {
-                if (d.id === sectionId) d.open = true;
-                else d.open = false;
+                if (d.id === sectionId) {
+                    d.open = true;
+                    // Focus the summary for accessibility
+                    const summary = d.querySelector('summary');
+                    if (summary) summary.focus();
+                } else {
+                    d.open = false;
+                }
             });
         }
+
+        // Ensure sidebar summary elements are focusable for accessibility
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('#sidebar details > summary').forEach(summary => {
+                summary.setAttribute('tabindex', '0');
+            });
+        });
 
         // Load sidebar state from localStorage
         function loadSidebarState() {
