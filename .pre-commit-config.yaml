@@ -1,0 +1,13 @@
+repos:
+  - repo: https://github.com/standard/standard
+    rev: v17.1.2
+    hooks:
+      - id: standard
+  - repo: local
+    hooks:
+      - id: ameba
+        name: Run ameba
+        entry: /usr/local/bin/ameba --fix src/ spec/
+        pass_filenames: false
+        language: script
+        stages: [commit]
