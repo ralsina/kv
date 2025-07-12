@@ -2,11 +2,10 @@ require "v4cr"
 require "log"
 
 # V4cr-based video capture module to replace FFmpeg
-
 class V4crVideoCapture
   Log = ::Log.for(self)
 
-  @device : V4cr::Device = V4cr::Device.new("/dev/video0/")
+  @device : V4cr::Device
   @streaming_fiber : Fiber?
   @running = false
   @stop_channel = Channel(Nil).new
@@ -15,10 +14,14 @@ class V4crVideoCapture
   @actual_fps : Float64 = 0.0
   @last_fps_time : Time::Span = Time.monotonic
 
-  MJPEG_BOUNDARY = "mjpegboundary"
+  MJPEG_BOUNDARY = "--mjpegboundary"
 
-  # All channel-based video client logic removed; direct streaming only
+  # Thread-safe list of client channels
+  @clients_mutex = Mutex.new
+  @clients = [] of Channel(Bytes)
+
   def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32, @fps : Int32 = 30)
+    @device = V4cr::Device.new(@device_path)
   end
 
   # Initialize and configure the V4L2 device
@@ -26,20 +29,15 @@ class V4crVideoCapture
     return false unless File.exists?(@device_path)
 
     begin
-      @device = V4cr::Device.new(@device_path)
       device = @device
       device.open
 
-      # JPEG quality control not supported; parameter removed
-
-      # Check if device supports video capture
       capability = device.query_capability
       unless capability.video_capture?
         Log.error { "Device #{@device_path} does not support video capture" }
         return false
       end
 
-      # Try to set MJPEG format with requested resolution, fallback to common ones if needed
       begin
         device.set_format(@width, @height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPEG)
         fmt = device.format
@@ -49,29 +47,7 @@ class V4crVideoCapture
         true
       rescue e
         Log.error { "Failed to set MJPEG format: #{e.message}" }
-        # Try fallback resolutions (match v4cr example order)
-        fallback_resolutions = [
-          {1920_u32, 1080_u32},
-          {320_u32, 240_u32},
-          {640_u32, 480_u32},
-          {800_u32, 600_u32},
-          {1024_u32, 768_u32},
-        ]
-
-        fallback_resolutions.each do |width, height|
-          begin
-            device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPEG)
-            fmt = device.format
-            @width = fmt.width || @width
-            @height = fmt.height || @height
-            Log.info { "Device #{@device_path} configured for MJPEG #{fmt.width}x#{fmt.height} (fallback, actual format: #{fmt.format_name})" }
-            return true
-          rescue
-            # Try next resolution
-          end
-        end
-
-        Log.error { "Device #{@device_path} doesn't support MJPEG format at any tested resolution" }
+        # Fallback logic can be added here if needed
         false
       end
     rescue e
@@ -86,31 +62,14 @@ class V4crVideoCapture
     return false unless initialize_device
 
     device = @device
-
     begin
-      # Request buffers for streaming (use 4 for better performance, per v4cr example)
       device.request_buffers(4)
-
-      # Log buffer lengths for debugging
-      device.buffer_manager.each_with_index do |buffer, idx|
-        Log.debug { "Buffer \\##{idx} length: \\#{buffer.length}" }
-      end
-
-      # Queue all buffers
       device.buffer_manager.each do |buffer|
         device.queue_buffer(buffer)
       end
-
-      # Start streaming
       device.start_streaming
       @running = true
-
-      # Wait a bit before starting the streaming fiber to avoid initial invalid frames
-      sleep(100.milliseconds)
-
-      # Start streaming fiber
       start_streaming_fiber
-
       Log.info { "V4cr video streaming started on #{@device_path}" }
       true
     rescue e
@@ -123,32 +82,29 @@ class V4crVideoCapture
   # Stop video streaming
   def stop_streaming
     return unless @running
-    @running = false
 
     # Signal streaming fiber to stop
-    spawn { @stop_channel.send(nil) }
+    @stop_channel.send(nil)
 
-    # Wait a bit for streaming fiber to finish
-    sleep(100.milliseconds)
+    # Wait for the fiber to finish by polling the @running flag
+    while @running
+      sleep(10.milliseconds)
+    end
+
     @streaming_fiber = nil
 
     cleanup
     Log.info { "V4cr video streaming stopped" }
   end
 
-  # Check if streaming is running
   def running?
     @running
   end
 
-  # Get device information
   def device_info
-    return nil unless @device
-
-    device = @device
-    capability = device.query_capability
-    format = device.format
-
+    return nil unless @device.open?
+    capability = @device.query_capability
+    format = @device.format
     {
       device: @device_path,
       card:   capability.card,
@@ -159,124 +115,111 @@ class V4crVideoCapture
     }
   end
 
-  # Stream MJPEG frames directly to an HTTP response (blocking, one client per call)
+  def add_client(channel : Channel(Bytes))
+    @clients_mutex.synchronize { @clients.<< channel }
+  end
+
+  def remove_client(channel : Channel(Bytes))
+    @clients_mutex.synchronize { @clients.delete(channel) }
+    channel.close rescue nil
+  end
+
   def stream_to_http_response(response)
-    device = @device
-    boundary = "--mjpegboundary"
-    frame_interval = (1000 // (@fps > 0 ? @fps : 30)).milliseconds
-    last_write_time = Time.monotonic
-    skipped = 0
+    channel = Channel(Bytes).new(5) # Buffer 5 frames
+    add_client(channel)
+    Log.info { "MJPEG client connected. Total clients: #{@clients_mutex.synchronize { @clients.size }} " }
+
     begin
       loop do
-        buffer = device.dequeue_buffer
-        data = buffer.read_data
-        size = data.size
-        valid_jpeg = size >= 1000 &&
-                     data[0] == 0xFF && data[1] == 0xD8 &&
-                     data[-2] == 0xFF && data[-1] == 0xD9
-
-        now = Time.monotonic
-        elapsed = now - last_write_time
-        if valid_jpeg
-          # Throttle to target FPS: if we're ahead of schedule, sleep
-          if elapsed < frame_interval
-            sleep(frame_interval - elapsed)
-            now = Time.monotonic
-            elapsed = now - last_write_time
-          end
-          response.write(boundary.to_slice)
-          response.write("\r\n".to_slice)
-          response.write("Content-Type: image/jpeg\r\n".to_slice)
-          response.write("Content-Length: #{size}\r\n\r\n".to_slice)
-          response.write(data)
-          response.write("\r\n".to_slice)
-          response.flush
-          @frame_count += 1
-          skipped = 0
-        else
-          # We're behind, skip this frame
-          skipped += 1
-          if skipped == 1 || skipped % 10 == 0
-            Log.debug { "MJPEG: Skipping frame(s) to catch up (#{skipped} skipped, write took #{elapsed.total_milliseconds.round(1)}ms)" }
-          end
-        end
-        # Update FPS counter every second
-        if (now - @last_fps_time) >= 1.second
-          elapsed = (now - @last_fps_time).total_seconds
-          @actual_fps = @frame_count.to_f64 / elapsed
-          @frame_count = 0
-          @last_fps_time = now
-        end
-        last_write_time = now
-        device.queue_buffer(buffer)
-        # Frame pacing is now enforced by sleep above
+        frame = channel.receive
+        response.write(MJPEG_BOUNDARY.to_slice)
+        response.write("\r\n".to_slice)
+        response.write("Content-Type: image/jpeg\r\n".to_slice)
+        response.write("Content-Length: #{frame.size}\r\n\r\n".to_slice)
+        response.write(frame)
+        response.write("\r\n".to_slice)
+        response.flush
       end
-    rescue e
-      Log.info { "Client disconnected or error: #{e.message}" }
+    rescue ex : Channel::ClosedError
+      Log.info { "MJPEG client channel closed." }
+    rescue ex
+      Log.error(exception: ex) { "MJPEG client streaming error" }
+    ensure
+      remove_client(channel)
+      Log.info { "MJPEG client disconnected. Total clients: #{@clients_mutex.synchronize { @clients.size }}" }
     end
   end
 
-  # Return the most recent measured FPS (frames per second) for MJPEG streaming
   def actual_fps : Float64
     @actual_fps
+  end
+
+  private def broadcast_frame(frame_data : Bytes)
+    @clients_mutex.synchronize do
+      # We dup the data because each channel receive might happen at a different time.
+      # This prevents one fiber from seeing data that another fiber has already modified
+      # if we were passing a mutable buffer. Slices are structs, but the underlying
+      # pointer could be an issue if not duped.
+      @clients.each do |client|
+        client.send(frame_data.dup)
+      end
+    end
   end
 
   private def start_streaming_fiber
     @streaming_fiber = spawn do
       device = @device
-      frame_count = 0
-      frame_sleep = (1000 // (@fps > 0 ? @fps : 30)).milliseconds
+      frame_sleep = (1000 / @fps).milliseconds
       loop do
-        # Check for stop signal (non-blocking)
         select
-        when @stop_channel.receive
-          Log.debug { "Streaming fiber received stop signal" }
+        when @stop_channel.receive?
           break
         else
-          # Continue streaming
+          # continue
         end
 
         begin
-          # Dequeue a frame buffer
           buffer = device.dequeue_buffer
-          frame_count += 1
-          # Always use buffer.read_data for the actual frame data
           data = buffer.read_data
           size = data.size
-          valid_jpeg = size >= 1000 &&
-                       data[0] == 0xFF && data[1] == 0xD8 &&
-                       data[-2] == 0xFF && data[-1] == 0xD9
-
-          if !valid_jpeg
-            Log.debug { "[Frame #{frame_count}] size=#{size} valid_jpeg=#{valid_jpeg}" }
-          end
+          valid_jpeg = size > 1000 && data[0] == 0xFF && data[1] == 0xD8 && data[size - 2] == 0xFF && data[size - 1] == 0xD9
 
           if valid_jpeg
-            # No-op: direct streaming only, do not increment @frame_count here
             broadcast_frame(data)
+            @frame_count += 1
           else
-            Log.debug { "Received invalid JPEG frame, skipping (frame #{frame_count}, size #{size})" }
+            Log.debug { "Skipping invalid JPEG frame (size: #{size})" }
           end
 
-          # Always re-queue the buffer
           device.queue_buffer(buffer)
 
-          # Control frame rate
-          sleep(frame_sleep)
-        rescue e
-          Log.error { "Error in streaming fiber: #{e.message}" }
-          break unless @running
-          sleep(20.milliseconds) # Shorter sleep for smoother recovery
+          now = Time.monotonic
+          if (now - @last_fps_time) >= 1.second
+            elapsed_seconds = (now - @last_fps_time).total_seconds
+            if elapsed_seconds > 0
+              @actual_fps = @frame_count / elapsed_seconds
+            end
+            @frame_count = 0
+            @last_fps_time = now
+          end
+
+          sleep frame_sleep
+        rescue ex : V4cr::Error
+          Log.error(exception: ex) { "V4L2 error in streaming fiber" }
+          sleep 1.second
+        rescue ex
+          Log.error(exception: ex) { "Unknown error in streaming fiber" }
+          break
         end
       end
-
-      Log.debug { "Streaming fiber exited" }
+      Log.info { "Streaming fiber stopped." }
+      # Close all client channels when the fiber stops
+      @clients_mutex.synchronize do
+        @clients.each(&.close)
+        @clients.clear
+      end
+      @running = false
     end
-  end
-
-  # No-op: broadcast_frame and client logic removed (direct streaming only)
-  private def broadcast_frame(frame_data : Bytes)
-    # No-op
   end
 
   private def cleanup
@@ -284,7 +227,6 @@ class V4crVideoCapture
     @device.close rescue nil
   end
 
-  # Cleanup on object destruction
   def finalize
     cleanup
   end

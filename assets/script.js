@@ -1,3 +1,218 @@
+// Initialization on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Upload input handler
+  const uploadInput = document.getElementById('image-upload')
+  if (uploadInput) {
+    uploadInput.addEventListener('change', () => {
+      if (uploadInput.files && uploadInput.files.length > 0) {
+        uploadUsbImage()
+      }
+    })
+  }
+
+  // Ensure sidebar summary elements are focusable for accessibility
+  document.querySelectorAll('#sidebar details > summary').forEach(summary => {
+    summary.setAttribute('tabindex', '0')
+  })
+
+  // Initialize functions that need to run on page load
+  loadSidebarState()
+  initializeVideo()
+  updateStatus()
+  measureLatency()
+  refreshUsbImages()
+  window.loadVideoQualities()
+
+  // Set up periodic updates
+  setInterval(updateStatus, 5000)
+  setInterval(measureLatency, 3000)
+
+  // Setup video capture and input handling (only once!)
+  setupVideoCapture()
+
+  // Show controls hint briefly
+  setTimeout(() => {
+    const controlsHint = document.getElementById('controls-hint')
+    if (controlsHint) {
+      controlsHint.style.display = 'inline-block'
+      setTimeout(() => {
+        controlsHint.style.opacity = '0'
+        controlsHint.style.transition = 'opacity 1s ease'
+        setTimeout(() => {
+          controlsHint.style.display = 'none'
+          controlsHint.style.opacity = '1'
+        }, 1000)
+      }, 5000)
+    }
+  }, 2000)
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/assets/service-worker.js')
+        .then(registration => {
+          console.log('Service Worker registered with scope:', registration.scope)
+        })
+        .catch(error => {
+          console.error('Service Worker registration failed:', error)
+        })
+    })
+  }
+
+  // Video quality menu button event
+  const btn = document.getElementById('video-quality-btn')
+  if (btn) {
+    btn.addEventListener('click', e => {
+      e.stopPropagation()
+      const menu = document.getElementById('video-quality-menu')
+      if (menu.classList.contains('active')) {
+        hideVideoQualityMenu()
+      } else {
+        showVideoQualityMenu()
+      }
+    })
+  }
+
+  // Sidebar Toggle
+  const sidebar = document.getElementById('sidebar')
+  const sidebarToggle = document.getElementById('sidebar-toggle')
+  sidebarToggle.addEventListener('click', () => {
+    const isCollapsed = sidebar.classList.toggle('collapsed')
+    sidebarToggle.innerHTML = isCollapsed ? '‹' : '›'
+    saveSidebarState(isCollapsed)
+  })
+
+  // Close sidebar when clicking outside of it
+  document.addEventListener('click', (e) => {
+    if (!sidebar.contains(e.target) && e.target !== sidebarToggle) {
+      if (!sidebar.classList.contains('collapsed')) {
+        sidebar.classList.add('collapsed')
+        sidebarToggle.innerHTML = '‹'
+        saveSidebarState(true)
+      }
+    }
+  })
+
+  // Status bar icon click handlers
+  document.getElementById('keyboard-status').addEventListener('click', e => {
+    e.stopPropagation()
+    sidebar.classList.remove('collapsed')
+    sidebarToggle.innerHTML = '›'
+    saveSidebarState(false);
+    // Open all keyboard-related sections
+    ['section-text', 'section-quickkeys', 'section-shortcuts'].forEach(id => {
+      const d = document.getElementById(id)
+      if (d) d.open = true
+    });
+    // Collapse others
+    ['section-mouse', 'section-video', 'section-usb', 'section-ethernet'].forEach(id => {
+      const d = document.getElementById(id)
+      if (d) d.open = false
+    })
+  })
+  document.getElementById('mouse-status').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-mouse') })
+  document.getElementById('storage-status').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-usb') })
+  document.getElementById('ethernet-status-bar').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-ethernet') })
+
+  // Fullscreen change listeners
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+  document.addEventListener('MSFullscreenChange', handleFullscreenChange)
+
+  // Text input focus handler
+  document.getElementById('text-input').addEventListener('focus', () => document.getElementById('video-stream').blur())
+
+  // Global keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (!videoFocused) {
+      if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+        e.preventDefault()
+        pasteFromClipboard()
+      }
+      if (e.key === 'F11' || (e.ctrlKey && e.key === 'f')) {
+        e.preventDefault()
+        window.toggleFullscreen()
+      }
+      if ((e.ctrlKey && e.key === 's') || (e.altKey && e.key === 's')) {
+        e.preventDefault()
+        takeScreenshot()
+      }
+    }
+  })
+})
+
+// --- Video Quality Menu Logic ---
+function showVideoQualityMenu () {
+  const menu = document.getElementById('video-quality-menu')
+  if (!menu) return
+  menu.classList.add('active')
+  document.addEventListener('mousedown', hideVideoQualityMenuOnClick, { once: true })
+}
+
+function hideVideoQualityMenuOnClick (e) {
+  const menu = document.getElementById('video-quality-menu')
+  if (!menu) return
+  if (!menu.contains(e.target) && e.target.id !== 'video-quality-btn') {
+    menu.classList.remove('active')
+  } else {
+    document.addEventListener('mousedown', hideVideoQualityMenuOnClick, { once: true })
+  }
+}
+
+function hideVideoQualityMenu () {
+  const menu = document.getElementById('video-quality-menu')
+  if (menu) menu.classList.remove('active')
+}
+
+function updateVideoQualityMenu (qualities, selected) {
+  const list = document.getElementById('video-quality-list')
+  if (!list) return
+  list.innerHTML = ''
+  qualities.forEach(q => {
+    const li = document.createElement('li')
+    li.textContent = q
+    if (q === selected) {
+      li.classList.add('selected')
+      li.innerHTML = '<span class="material-icons">check</span>' + q
+    }
+    li.onclick = () => {
+      if (q !== selected) {
+        window.changeVideoQuality(q)
+      }
+      hideVideoQualityMenu()
+    }
+    list.appendChild(li)
+  })
+}
+
+// --- Video Quality Selection ---
+window.loadVideoQualities = function () {
+  fetch('/api/status')
+    .then(res => res.json())
+    .then(data => {
+      if (data.video && data.video.qualities) {
+        // This function seems to target a legacy dropdown.
+        // The new menu is updated via updateStatus -> updateVideoQualityMenu
+        const select = document.getElementById('video-quality-select')
+        if (select) {
+          select.innerHTML = data.video.qualities.map(q => `<option value="${q}"${q === data.video.selected_quality ? ' selected' : ''}>${q}</option>`).join('')
+        }
+      }
+    })
+}
+
+window.changeVideoQuality = function (quality) {
+  fetch('/api/video/quality', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quality })
+  }).then(() => {
+    // Reload video stream after a short delay
+    setTimeout(() => initializeVideo(), 500)
+    setTimeout(() => updateStatus(), 1000)
+  })
+}
+
 /* eslint-disable no-unused-vars */
 /* global WebSocket, location, prompt, XMLHttpRequest, localStorage, alert, updateStatus, measureLatency, initializeVideo, updateFpsIndicator, setupInputWebSocket, wsSendInput, sendApiRequest, sendMousePress, sendMouseRelease, sendMouseWheel, sendSingleMouseMove, keyEventToHIDKey, getModifiers, setupVideoCapture, pasteFromClipboard, handleFullscreenChange, takeScreenshot, refreshUsbImages, uploadUsbImage, openSidebarSection, loadSidebarState, saveSidebarState */
 /* global confirm */
@@ -10,13 +225,14 @@ window.setEthernet = function (enable) {
   })
     .then(response => response.json())
     .then(data => {
-      // Optionally show a notification or update status immediately
       updateStatus()
     })
     .catch(error => {
       console.error('Failed to set ethernet:', error)
     })
 }
+
+// --- Audio ---
 let audioStream = null
 let audioLatencyInterval = null
 
@@ -29,13 +245,12 @@ function manageAudioLatency (audioElement) {
       const currentTime = audioElement.currentTime
       const latency = bufferEnd - currentTime
 
-      // If latency is over a threshold (e.g., 1 second), seek to the live edge
       if (latency > 1.0) {
         console.log(`High audio latency detected (${latency.toFixed(2)}s), seeking to live edge.`)
         audioElement.currentTime = bufferEnd
       }
     }
-  }, 30000) // Check every 30 seconds
+  }, 30000)
 }
 
 window.toggleAudio = function () {
@@ -43,7 +258,6 @@ window.toggleAudio = function () {
   const icon = audioBtn.querySelector('.material-icons')
 
   if (audioStream) {
-    // Stop the stream
     if (audioLatencyInterval) clearInterval(audioLatencyInterval)
     audioStream.pause()
     audioStream.src = ''
@@ -56,11 +270,10 @@ window.toggleAudio = function () {
     audioBtn.title = 'Start Audio'
     audioBtn.classList.remove('active')
   } else {
-    // Start the stream
     audioStream = document.createElement('audio')
     audioStream.src = '/audio.ogg'
-    audioStream.autoplay = false // We control play explicitly
-    audioStream.style.display = 'none' // Hide the element
+    audioStream.autoplay = false
+    audioStream.style.display = 'none'
 
     audioStream.addEventListener('play', () => {
       icon.textContent = 'volume_off'
@@ -71,7 +284,6 @@ window.toggleAudio = function () {
 
     audioStream.addEventListener('error', (e) => {
       console.error('Audio playback error:', e)
-      // Reset on error
       if (audioLatencyInterval) clearInterval(audioLatencyInterval)
       if (audioStream) {
         audioStream.pause()
@@ -92,7 +304,7 @@ window.toggleAudio = function () {
   }
 }
 
-// FPS Indicator: Use server-reported FPS from /api/status
+// --- Status & Video ---
 window.updateFpsIndicator = function (fps) {
   const fpsIndicator = document.getElementById('fps-indicator')
   if (fpsIndicator) {
@@ -104,21 +316,18 @@ window.updateFpsIndicator = function (fps) {
     else fpsIndicator.classList.add('bad')
   }
 }
+
 let videoFocused = false
 let pointerLocked = false
-const pressedButtons = new Set() // Track currently pressed mouse buttons
-
-// restartStream removed
+const pressedButtons = new Set()
 
 window.initializeVideo = function () {
   const video = document.getElementById('video-stream')
-  // Always set src, even if already set, to force reload
   video.src = '/video.mjpg?' + Date.now()
-  video.style.display = 'block' // Ensure it's visible
+  video.style.display = 'block'
 }
 
 window.updateStatus = function () {
-  // ECM/Ethernet sidebar indicator and controls (eth must be defined only once after data is fetched)
   fetch('/api/status')
     .then(response => response.json())
     .then(data => {
@@ -164,7 +373,7 @@ window.updateStatus = function () {
       const storageStatus = document.getElementById('storage-status')
 
       if (data.video.status === 'running') {
-        videoStatus.innerHTML = '<span class="material-icons">videocam</span>Live (' + data.video.resolution + '@' + data.video.fps + 'fps)'
+        videoStatus.innerHTML = `<span class="material-icons">videocam</span>Live (${data.video.resolution}@${data.video.fps}fps)`
         videoStatus.classList.add('good')
       } else {
         videoStatus.innerHTML = '<span class="material-icons">videocam_off</span>Connecting...'
@@ -173,6 +382,19 @@ window.updateStatus = function () {
 
       // Update FPS indicator with server-reported FPS
       updateFpsIndicator(data.video.actual_fps)
+
+      // Update video quality menu
+      if (data.video && data.video.qualities) {
+        updateVideoQualityMenu(data.video.qualities, data.video.selected_quality)
+      }
+
+      // Update video quality dropdown if present (legacy)
+      if (data.video.qualities && Array.isArray(data.video.qualities)) {
+        const select = document.getElementById('video-quality-select')
+        if (select) {
+          select.innerHTML = data.video.qualities.map(q => `<option value="${q}"${q === data.video.selected_quality ? ' selected' : ''}>${q}</option>`).join('')
+        }
+      }
 
       // ECM/Ethernet status bar (icon-only, color for status)
       const ethBar = document.getElementById('ethernet-status-bar')
@@ -209,7 +431,6 @@ window.updateStatus = function () {
         mouseStatus.className = 'bad'
       }
 
-      // USB status (icon only)
       if (data.storage && data.storage.enabled) {
         storageStatus.innerHTML = '<span class="material-icons good">usb</span>'
         storageStatus.className = 'good'
@@ -217,8 +438,6 @@ window.updateStatus = function () {
         storageStatus.innerHTML = '<span class="material-icons bad">usb</span>'
         storageStatus.className = 'bad'
       }
-
-      // ...existing code...
     })
     .catch(error => {
       console.error('Error:', error)
@@ -260,7 +479,6 @@ window.measureLatency = function () {
       document.getElementById('latency-indicator').textContent = '♾️ --ms'
       document.getElementById('latency-indicator').className = 'latency-indicator bad'
     })
-    .catch(error => console.error('Error measuring latency:', error))
 }
 
 // --- WebSocket input client ---
@@ -442,12 +660,10 @@ window.setupVideoCapture = function () {
   })
   video.addEventListener('keydown', (e) => {
     if (!videoFocused) return
-    // Always prevent browser shortcuts when video is focused and a key is sent to the server
     const hidKey = keyEventToHIDKey(e)
     if (hidKey) {
       e.preventDefault()
       const modifiers = getModifiers(e)
-      // Only send if video is both focused and pointer locked, and event target is video
       if (videoFocused && pointerLocked && e.target === video) {
         window.sendCombination(modifiers, [hidKey])
       }
@@ -468,32 +684,7 @@ window.setupVideoCapture = function () {
   })
 }
 
-document.getElementById('text-input').addEventListener('focus', () => document.getElementById('video-stream').blur())
-
-// Global keyboard shortcuts for pasting, fullscreen and screenshot
-document.addEventListener('keydown', (e) => {
-  // Only handle global shortcuts if not focused on video
-  if (!videoFocused) {
-    // Ctrl+Shift+V for paste
-    if (e.ctrlKey && e.shiftKey && e.key === 'V') {
-      e.preventDefault()
-      pasteFromClipboard()
-    }
-    // F11 or Ctrl+F for fullscreen toggle
-    if (e.key === 'F11' || (e.ctrlKey && e.key === 'f')) {
-      e.preventDefault()
-      window.toggleFullscreen()
-    }
-    // Ctrl+S or Alt+S for screenshot
-    if ((e.ctrlKey && e.key === 's') || (e.altKey && e.key === 's')) {
-      e.preventDefault()
-      takeScreenshot()
-    }
-  }
-})
-
-// USB Mass Storage (Disk Image Selection & Upload)
-
+// --- USB Mass Storage ---
 window.refreshUsbImages = function () {
   fetch('/api/storage/images')
     .then(response => response.json())
@@ -508,7 +699,6 @@ window.refreshUsbImages = function () {
             const icon = isSelected ? 'eject' : 'play_arrow'
             const btnClass = isSelected ? 'detach-usb-btn' : 'mount-usb-btn'
             const btnTitle = isSelected ? 'Detach' : 'Mount'
-            // Mount/Eject and Delete buttons grouped together
             return `<div style="display:flex;align-items:center;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isSelected ? 'font-weight:bold;color:#4ade80;' : ''}">` +
               '<div style="display:flex;gap:0.25em;align-items:center;margin-left:0.5em;">' +
                 `<button class="outline ${btnClass}" style="min-width:32px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;" title="${btnTitle}" onclick="${isSelected ? 'detachUsbImage()' : `selectUsbImage('${img}')`}"><span class="material-icons">${icon}</span></button>` +
@@ -568,81 +758,16 @@ window.deleteUsbImage = function (filename) {
     })
 }
 
-// Show file chooser when clicking Upload button
-// Unified DOMContentLoaded handler to avoid duplicate event handler attachment
-document.addEventListener('DOMContentLoaded', () => {
-  // Upload input handler
-  const uploadInput = document.getElementById('image-upload')
-  if (uploadInput) {
-    uploadInput.addEventListener('change', () => {
-      if (uploadInput.files && uploadInput.files.length > 0) {
-        uploadUsbImage()
-      }
-    })
-  }
-
-  // Ensure sidebar summary elements are focusable for accessibility
-  document.querySelectorAll('#sidebar details > summary').forEach(summary => {
-    summary.setAttribute('tabindex', '0')
-  })
-
-  // Initialize functions that need to run on page load
-  loadSidebarState()
-  initializeVideo()
-  updateStatus()
-  measureLatency()
-  refreshUsbImages()
-
-  // Set up periodic updates
-  setInterval(updateStatus, 5000)
-  setInterval(measureLatency, 3000)
-
-  // Setup video capture and input handling (only once!)
-  setupVideoCapture()
-
-  // Show controls hint briefly
-  setTimeout(() => {
-    const controlsHint = document.getElementById('controls-hint')
-    if (controlsHint) {
-      controlsHint.style.display = 'inline-block'
-      setTimeout(() => {
-        controlsHint.style.opacity = '0'
-        controlsHint.style.transition = 'opacity 1s ease'
-        setTimeout(() => {
-          controlsHint.style.display = 'none'
-          controlsHint.style.opacity = '1'
-        }, 1000)
-      }, 5000)
-    }
-  }, 2000)
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/assets/service-worker.js')
-        .then(registration => {
-          console.log('Service Worker registered with scope:', registration.scope)
-        })
-        .catch(error => {
-          console.error('Service Worker registration failed:', error)
-        })
-    })
-  }
-})
-
-// Sidebar Toggle with Local Storage
-const sidebar = document.getElementById('sidebar')
-const sidebarToggle = document.getElementById('sidebar-toggle')
-
+// --- Sidebar ---
 // Helper: open sidebar and expand a section
 window.openSidebarSection = function (sectionId) {
+  const sidebar = document.getElementById('sidebar')
   sidebar.classList.remove('collapsed')
-  sidebarToggle.innerHTML = '›'
+  document.getElementById('sidebar-toggle').innerHTML = '›'
   saveSidebarState(false)
-  // Collapse all details except the one we want
   document.querySelectorAll('#sidebar details').forEach(d => {
     if (d.id === sectionId) {
       d.open = true
-      // Focus the summary for accessibility
       const summary = d.querySelector('summary')
       if (summary) summary.focus()
     } else {
@@ -651,161 +776,70 @@ window.openSidebarSection = function (sectionId) {
   })
 }
 
-// (Moved to unified DOMContentLoaded handler above)
-
-// Load sidebar state from localStorage
 window.loadSidebarState = function () {
+  const sidebar = document.getElementById('sidebar')
   const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true'
   if (isCollapsed) {
     sidebar.classList.add('collapsed')
-    sidebarToggle.innerHTML = '‹'
+    document.getElementById('sidebar-toggle').innerHTML = '‹'
   } else {
     sidebar.classList.remove('collapsed')
-    sidebarToggle.innerHTML = '›'
+    document.getElementById('sidebar-toggle').innerHTML = '›'
   }
 }
 
-// Save sidebar state to localStorage
 window.saveSidebarState = function (isCollapsed) {
   localStorage.setItem('sidebarCollapsed', isCollapsed.toString())
 }
 
-sidebarToggle.addEventListener('click', () => {
-  const isCollapsed = sidebar.classList.toggle('collapsed')
-  sidebarToggle.innerHTML = isCollapsed ? '‹' : '›'
-  saveSidebarState(isCollapsed)
-})
-
-// Close sidebar when clicking outside of it
-document.addEventListener('click', (e) => {
-  if (!sidebar.contains(e.target) && e.target !== sidebarToggle) {
-    if (!sidebar.classList.contains('collapsed')) {
-      sidebar.classList.add('collapsed')
-      sidebarToggle.innerHTML = '‹'
-      saveSidebarState(true)
-    }
-  }
-})
-
-// Status bar icon click handlers to open sidebar to correct section
-document.getElementById('keyboard-status').addEventListener('click', e => {
-  e.stopPropagation()
-  sidebar.classList.remove('collapsed')
-  sidebarToggle.innerHTML = '›'
-  saveSidebarState(false);
-  // Open all keyboard-related sections
-  ['section-text', 'section-quickkeys', 'section-shortcuts'].forEach(id => {
-    const d = document.getElementById(id)
-    if (d) d.open = true
-  });
-  // Collapse others
-  ['section-mouse', 'section-video', 'section-usb', 'section-ethernet'].forEach(id => {
-    const d = document.getElementById(id)
-    if (d) d.open = false
-  })
-})
-document.getElementById('mouse-status').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-mouse') })
-document.getElementById('storage-status').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-usb') })
-document.getElementById('ethernet-status-bar').addEventListener('click', e => { e.stopPropagation(); openSidebarSection('section-ethernet') })
-
-// Fullscreen toggle function
+// --- Fullscreen & Screenshot ---
 window.toggleFullscreen = function () {
   const videoContainer = document.querySelector('.video-container')
   const fullscreenBtn = document.getElementById('fullscreen-btn')
 
   if (videoContainer.classList.contains('fullscreen')) {
-    // Exit fullscreen
-    if (document.exitFullscreen) {
-      document.exitFullscreen()
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen()
-    } else if (document.mozCancelFullScreen) {
-      document.mozCancelFullScreen()
-    } else if (document.msExitFullscreen) {
-      document.msExitFullscreen()
-    }
-    videoContainer.classList.remove('fullscreen')
-    fullscreenBtn.querySelector('.material-icons').textContent = 'fullscreen'
+    if (document.exitFullscreen) document.exitFullscreen()
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen()
+    else if (document.mozCancelFullScreen) document.mozCancelFullScreen()
+    else if (document.msExitFullscreen) document.msExitFullscreen()
   } else {
-    // Enter fullscreen
-    if (videoContainer.requestFullscreen) {
-      videoContainer.requestFullscreen()
-    } else if (videoContainer.webkitRequestFullscreen) {
-      videoContainer.webkitRequestFullscreen()
-    } else if (videoContainer.mozRequestFullScreen) {
-      videoContainer.mozRequestFullScreen()
-    } else if (videoContainer.msRequestFullscreen) {
-      videoContainer.msRequestFullscreen()
-    }
-    videoContainer.classList.add('fullscreen')
-    fullscreenBtn.querySelector('.material-icons').textContent = 'fullscreen_exit'
+    if (videoContainer.requestFullscreen) videoContainer.requestFullscreen()
+    else if (videoContainer.webkitRequestFullscreen) videoContainer.webkitRequestFullscreen()
+    else if (videoContainer.mozRequestFullScreen) videoContainer.mozRequestFullScreen()
+    else if (videoContainer.msRequestFullscreen) videoContainer.msRequestFullscreen()
   }
 }
 
-// Fullscreen change handler
 window.handleFullscreenChange = function () {
   const videoContainer = document.querySelector('.video-container')
   const fullscreenBtn = document.getElementById('fullscreen-btn')
+  const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement
 
-  if (document.fullscreenElement ||
-                document.webkitFullscreenElement ||
-                document.mozFullScreenElement ||
-                document.msFullscreenElement) {
-    // We're in fullscreen mode
-    videoContainer.classList.add('fullscreen')
-    fullscreenBtn.querySelector('.material-icons').textContent = 'fullscreen_exit'
-  } else {
-    // We're not in fullscreen mode
-    videoContainer.classList.remove('fullscreen')
-    fullscreenBtn.querySelector('.material-icons').textContent = 'fullscreen'
-  }
+  videoContainer.classList.toggle('fullscreen', !!isFullscreen)
+  fullscreenBtn.querySelector('.material-icons').textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen'
 }
 
-// Listen for fullscreen change events from browser API (after handler is defined)
-document.addEventListener('fullscreenchange', handleFullscreenChange)
-document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
-document.addEventListener('mozfullscreenchange', handleFullscreenChange)
-document.addEventListener('MSFullscreenChange', handleFullscreenChange)
-
-// Screenshot function
 window.takeScreenshot = function () {
   const video = document.getElementById('video-stream')
-
-  // Create a canvas element to draw the image
   const canvas = document.createElement('canvas')
   canvas.width = video.naturalWidth
   canvas.height = video.naturalHeight
-
-  // Draw the current video frame to the canvas
   const ctx = canvas.getContext('2d')
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
   try {
-    // Convert canvas to a data URL and create a download link
     const dataURL = canvas.toDataURL('image/png')
     const a = document.createElement('a')
     a.href = dataURL
-
-    // Generate timestamp for the filename
-    const date = new Date()
-    const timestamp = date.toISOString()
-      .replace(/:/g, '-')
-      .replace(/\..+/, '')
-      .replace('T', '_')
-
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '').replace('T', '_')
     a.download = `kvm_screenshot_${timestamp}.png`
-
-    // Trigger download
     document.body.appendChild(a)
     a.click()
-
-    // Clean up
     setTimeout(() => {
       document.body.removeChild(a)
       URL.revokeObjectURL(dataURL)
     }, 100)
 
-    // Show a brief notification
     const notification = document.createElement('div')
     notification.style.position = 'fixed'
     notification.style.bottom = '20px'
@@ -817,7 +851,6 @@ window.takeScreenshot = function () {
     notification.style.borderRadius = '4px'
     notification.style.zIndex = '9999'
     notification.innerHTML = '<span class="material-icons" style="vertical-align: middle; margin-right: 8px;">check_circle</span> Screenshot saved'
-
     document.body.appendChild(notification)
     setTimeout(() => {
       notification.style.opacity = '0'
@@ -829,43 +862,3 @@ window.takeScreenshot = function () {
     alert('Failed to take screenshot. This may be due to security restrictions.')
   }
 }
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  loadSidebarState() // Load sidebar state first
-  initializeVideo()
-  updateStatus()
-  measureLatency()
-  refreshUsbImages()
-  setInterval(updateStatus, 5000)
-  setInterval(measureLatency, 3000)
-  setupVideoCapture()
-
-  // Show controls hint briefly
-  setTimeout(() => {
-    const controlsHint = document.getElementById('controls-hint')
-    if (controlsHint) {
-      controlsHint.style.display = 'inline-block'
-      setTimeout(() => {
-        controlsHint.style.opacity = '0'
-        controlsHint.style.transition = 'opacity 1s ease'
-        setTimeout(() => {
-          controlsHint.style.display = 'none'
-          controlsHint.style.opacity = '1'
-        }, 1000)
-      }, 5000)
-    }
-  }, 2000)
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/assets/service-worker.js')
-        .then(registration => {
-          console.log('Service Worker registered with scope:', registration.scope)
-        })
-        .catch(error => {
-          console.error('Service Worker registration failed:', error)
-        })
-    })
-  }
-})

@@ -8,6 +8,49 @@ require "file_utils"
 
 # Updated KVM manager using V4cr for video capture instead of FFmpeg
 class KVMManagerV4cr
+  # Supported video qualities (resolution@fps)
+  @@available_qualities = [
+    "1920x1080@30",
+    "1280x720@30",
+    "1024x768@30",
+    "800x600@30",
+    "640x480@30",
+  ] of String
+
+  def self.available_qualities : Array(String)
+    @@available_qualities
+  end
+
+  def available_qualities : Array(String)
+    @@available_qualities
+  end
+
+  def selected_quality : String
+    "#{@width}x#{@height}@#{@fps}"
+  end
+
+  # Change video quality (resolution@fps string)
+  def video_quality=(quality : String) : Bool
+    # Parse e.g. "1280x720@30"
+    if match = quality.match(/(\d+)x(\d+)@(\d+)/)
+      width = match[1].to_u32
+      height = match[2].to_u32
+      fps = match[3].to_i32
+      # Only restart if different
+      if width != @width || height != @height || fps != @fps
+        stop_video_stream
+        @width = width
+        @height = height
+        @fps = fps
+        @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
+        start_video_stream
+      end
+      true
+    else
+      false
+    end
+  end
+
   # Upload and decompress a disk image, always storing as .img
   def upload_and_decompress_image(uploaded_path : String, orig_filename : String) : {success: Bool, message: String, filename: String?}
     disk_images_dir = "disk-images"
@@ -290,22 +333,26 @@ class KVMManagerV4cr
     video_status = if @video_capture.running?
                      info = @video_capture.device_info
                      {
-                       status:       "running",
-                       device:       @video_device,
-                       resolution:   "#{@width}x#{@height}",
-                       fps:          @fps,
-                       actual_fps:   @video_capture.actual_fps,
-                       stream_url:   "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
-                       driver:       info.try(&.[:driver]) || "unknown",
-                       card:         info.try(&.[:card]) || "unknown",
-                       format:       info.try(&.[:format]) || "unknown",
-                       clients:      nil, # client_count removed, always nil
-                       capture_type: "v4cr",
+                       status:           "running",
+                       device:           @video_device,
+                       resolution:       "#{@width}x#{@height}",
+                       fps:              @fps,
+                       actual_fps:       @video_capture.actual_fps,
+                       stream_url:       "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
+                       driver:           info.try(&.[:driver]) || "unknown",
+                       card:             info.try(&.[:card]) || "unknown",
+                       format:           info.try(&.[:format]) || "unknown",
+                       clients:          nil, # client_count removed, always nil
+                       capture_type:     "v4cr",
+                       qualities:        available_qualities,
+                       selected_quality: selected_quality,
                      }
                    else
                      {
-                       status:       "stopped",
-                       capture_type: "v4cr",
+                       status:           "stopped",
+                       capture_type:     "v4cr",
+                       qualities:        available_qualities,
+                       selected_quality: selected_quality,
                      }
                    end
 

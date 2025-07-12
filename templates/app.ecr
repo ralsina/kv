@@ -148,6 +148,12 @@
                     <button id="screenshot-btn" class="video-control-btn" onclick="takeScreenshot()" title="Take Screenshot">
                         <span class="material-icons">photo_camera</span>
                     </button>
+                    <button id="video-quality-btn" class="video-control-btn" title="Video Quality" style="position:relative;">
+                        <span class="material-icons">settings</span>
+                    </button>
+                    <div id="video-quality-menu" class="video-quality-menu">
+                        <ul id="video-quality-list"></ul>
+                    </div>
                 </div>
             </div>
             <div id="no-video" class="no-video">
@@ -163,6 +169,7 @@
         </footer>
     </main>
 
+    <link rel="stylesheet" href="/video_quality_menu.css">
     <script src="/script.js"></script>
 </body>
 </html>

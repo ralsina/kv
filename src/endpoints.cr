@@ -1,3 +1,25 @@
+post "/api/video/quality" do |env|
+  env.response.content_type = "application/json"
+  manager = GlobalKVM.get_manager
+  begin
+    body = JSON.parse((env.request.body.try &.gets_to_end).to_s)
+    quality = body["quality"]?.try(&.as_s)
+    if !quality || quality.strip.empty?
+      {success: false, message: "No quality specified"}.to_json
+    elsif !manager.available_qualities.includes?(quality)
+      {success: false, message: "Unsupported quality"}.to_json
+    else
+      ok = manager.video_quality = quality
+      if ok
+        {success: true, message: "Video quality set", selected: manager.selected_quality}.to_json
+      else
+        {success: false, message: "Failed to set video quality"}.to_json
+      end
+    end
+  rescue ex
+    {success: false, message: "Invalid request: #{ex.message}"}.to_json
+  end
+end
 require "kemal"
 require "json"
 require "ecr"
