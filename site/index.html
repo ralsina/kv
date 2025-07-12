@@ -96,8 +96,32 @@
         <p>We're happy to help with guidance and support.</p>
         <a href="https://github.com/ralsina/kv/issues" role="button" class="secondary">Ask for Help on GitHub</a>
     </section>
+    <section id="disk-images" class="container" style="margin-top: 4rem;">
+        <h2>Disk Image Management</h2>
+        <p>Manage your virtual disk images. Select an image to mount it to the KVM, or delete unused images.</p>
+        <div id="disk-image-list" class="grid">
+            <!-- Disk images will be loaded here by JavaScript -->
+            <p>Loading disk images...</p>
+        </div>
+        <div class="grid">
+            <input type="file" id="image-upload" accept=".img,.iso,.zip,.gz,.bz2,.xz" style="display: none;">
+            <button onclick="document.getElementById('image-upload').click()">Upload New Image</button>
+        </div>
+        <div style="margin-top: 1em;">
+            <span id="usb-upload-status"></span>
+            <progress id="usb-upload-progress" value="0" max="100" style="width: 100%; display: none;"></progress>
+        </div>
+    </section>
+
+    <section id="hardware-help" style="text-align: center; margin-top: 4rem; padding: 2rem; background: var(--pico-background-color); border-radius: var(--pico-border-radius);">
+        <h2>Need Help with a Hardware Project?</h2>
+        <p>If you're looking to integrate KV into your own hardware project and need assistance, don't hesitate to reach out!</p>
+        <p>We're happy to help with guidance and support.</p>
+        <a href="https://github.com/ralsina/kv/issues" role="button" class="secondary">Ask for Help on GitHub</a>
+    </section>
     <footer class="footer">
         <p>&copy; 2025 KV Project. All rights reserved.</p>
     </footer>
+    <script src="/assets/script.js"></script>
 </body>
 </html>

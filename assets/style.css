@@ -19,7 +19,9 @@
         font-size: 1.1em !important;
       }
         :root {
-            --sidebar-width: 320px;
+            --sidebar-width: 50vw;
+            --sidebar-max-width: 90vw;
+            --sidebar-min-width: 320px;
         }
         body {
             margin: 0;
@@ -33,6 +35,8 @@
             top: 0;
             right: 0;
             width: var(--sidebar-width);
+            max-width: var(--sidebar-max-width);
+            min-width: var(--sidebar-min-width);
             height: 100vh;
             background: rgba(18, 18, 20, 0.8); /* Dark translucent background */
             backdrop-filter: blur(12px); /* Add blur effect for modern look */
@@ -313,7 +317,7 @@
             flex-shrink: 0; /* Prevent footer from shrinking */
         }
         @media (max-width: 768px) {
-            :root { --sidebar-width: 280px; }
+            :root { --sidebar-width: 90vw; --sidebar-max-width: 100vw; --sidebar-min-width: 180px; }
             header {
                 flex-direction: column;
                 gap: 0.5rem;

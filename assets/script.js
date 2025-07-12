@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* global WebSocket, location, prompt, XMLHttpRequest, localStorage, alert, updateStatus, measureLatency, initializeVideo, updateFpsIndicator, setupInputWebSocket, wsSendInput, sendApiRequest, sendMousePress, sendMouseRelease, sendMouseWheel, sendSingleMouseMove, keyEventToHIDKey, getModifiers, setupVideoCapture, pasteFromClipboard, handleFullscreenChange, takeScreenshot, refreshUsbImages, uploadUsbImage, openSidebarSection, loadSidebarState, saveSidebarState */
+/* global confirm */
 
 // ECM/Ethernet enable/disable controls
 window.setEthernet = function (enable) {
@@ -484,59 +485,7 @@ document.addEventListener('keydown', (e) => {
 })
 
 // USB Mass Storage (Disk Image Selection & Upload)
-window.uploadUsbImage = function () {
-  const input = document.getElementById('usb-upload-input')
-  const status = document.getElementById('usb-upload-status')
-  const progress = document.getElementById('usb-upload-progress')
-  if (!input.files || input.files.length === 0) return
-  const file = input.files[0]
-  status.textContent = 'Uploading...'
-  progress.value = 0
-  progress.style.display = ''
-  const formData = new FormData()
-  formData.append('file', file)
-  const xhr = new XMLHttpRequest()
-  xhr.open('POST', '/api/storage/upload', true)
-  xhr.upload.onprogress = function (e) {
-    if (e.lengthComputable) {
-      const percent = Math.round((e.loaded / e.total) * 100)
-      progress.value = percent
-    }
-  }
-  xhr.onload = function () {
-    progress.style.display = 'none'
-    let data = {}
-    try { data = JSON.parse(xhr.responseText) } catch {}
-    if (xhr.status === 200 && data.success) {
-      status.textContent = 'Upload successful: ' + data.filename
-      input.value = ''
-      setTimeout(() => { status.textContent = '' }, 2000)
-      refreshUsbImages()
-    } else {
-      status.textContent = 'Upload failed: ' + (data.message || 'Unknown error')
-    }
-  }
-  xhr.onerror = function () {
-    progress.style.display = 'none'
-    status.textContent = 'Upload failed: Network error'
-  }
-  xhr.send(formData)
-}
 
-// Show file chooser when clicking Upload button
-document.addEventListener('DOMContentLoaded', () => {
-  const uploadBtn = document.getElementById('usb-upload-btn')
-  const uploadInput = document.getElementById('usb-upload-input')
-  uploadBtn.addEventListener('click', () => {
-    uploadInput.value = ''
-    uploadInput.click()
-  })
-  uploadInput.addEventListener('change', () => {
-    if (uploadInput.files && uploadInput.files.length > 0) {
-      uploadUsbImage()
-    }
-  })
-})
 window.refreshUsbImages = function () {
   fetch('/api/storage/images')
     .then(response => response.json())
@@ -551,11 +500,14 @@ window.refreshUsbImages = function () {
             const icon = isSelected ? 'eject' : 'play_arrow'
             const btnClass = isSelected ? 'detach-usb-btn' : 'mount-usb-btn'
             const btnTitle = isSelected ? 'Detach' : 'Mount'
+            // Mount/Eject and Delete buttons grouped together
             return `<div style="display:flex;align-items:center;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isSelected ? 'font-weight:bold;color:#4ade80;' : ''}">` +
-                                    `<button class="outline ${btnClass}" style="margin-right:0.5em;min-width:32px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;" title="${btnTitle}" onclick="${isSelected ? 'detachUsbImage()' : `selectUsbImage('${img}')`}">` +
-                                    `<span class="material-icons">${icon}</span></button>` +
-                                    `<span title="${img}">${img}${isSelected ? ' (selected)' : ''}</span>` +
-                                    '</div>'
+              '<div style="display:flex;gap:0.25em;align-items:center;margin-left:0.5em;">' +
+                `<button class="outline ${btnClass}" style="min-width:32px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;" title="${btnTitle}" onclick="${isSelected ? 'detachUsbImage()' : `selectUsbImage('${img}')`}"><span class="material-icons">${icon}</span></button>` +
+                `<button class="outline secondary" style="min-width:32px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;" title="Delete Image" onclick="deleteUsbImage('${img}')" ${isSelected ? 'disabled' : ''}><span class="material-icons">delete</span></button>` +
+              '</div>' +
+              `<span title="${img}" style="flex-grow:1;margin-left:0.75em;">${img}${isSelected ? ' (selected)' : ''}</span>` +
+              '</div>'
           }).join('')
         }
       } else {
@@ -586,16 +538,68 @@ window.detachUsbImage = function () {
   }).then(() => { setTimeout(() => { refreshUsbImages(); updateStatus() }, 300) }).catch(error => console.error('Error detaching USB image:', error))
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  // ...existing code...
-  refreshUsbImages()
-  document.getElementById('detach-usb-btn').onclick = function () {
-    fetch('/api/storage/select', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: null })
-    }).then(() => { setTimeout(() => { refreshUsbImages(); updateStatus() }, 300) }).catch(error => console.error('Error detaching USB image:', error))
+window.deleteUsbImage = function (filename) {
+  if (!confirm(`Are you sure you want to delete ${filename}? This action cannot be undone.`)) {
+    return
   }
+  fetch(`/api/storage/images/${filename}`, {
+    method: 'DELETE'
+  })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message)
+        refreshUsbImages()
+      } else {
+        alert(`Failed to delete image: ${data.message}`)
+      }
+    })
+    .catch(error => {
+      console.error('Error deleting USB image:', error)
+      alert('Error deleting USB image.')
+    })
+}
+
+// Show file chooser when clicking Upload button
+document.addEventListener('DOMContentLoaded', () => {
+  const uploadInput = document.getElementById('image-upload')
+  if (uploadInput) {
+    uploadInput.addEventListener('change', () => {
+      if (uploadInput.files && uploadInput.files.length > 0) {
+        uploadUsbImage()
+      }
+    })
+  }
+
+  // Initialize functions that need to run on page load
+  loadSidebarState()
+  initializeVideo()
+  updateStatus()
+  measureLatency()
+  refreshUsbImages()
+
+  // Set up periodic updates
+  setInterval(updateStatus, 5000)
+  setInterval(measureLatency, 3000)
+
+  // Setup video capture and input handling
+  setupVideoCapture()
+
+  // Show controls hint briefly
+  setTimeout(() => {
+    const controlsHint = document.getElementById('controls-hint')
+    if (controlsHint) {
+      controlsHint.style.display = 'inline-block'
+      setTimeout(() => {
+        controlsHint.style.opacity = '0'
+        controlsHint.style.transition = 'opacity 1s ease'
+        setTimeout(() => {
+          controlsHint.style.display = 'none'
+          controlsHint.style.opacity = '1'
+        }, 1000)
+      }, 5000)
+    }
+  }, 2000)
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -728,12 +732,7 @@ window.toggleFullscreen = function () {
   }
 }
 
-// Listen for fullscreen change events from browser API
-document.addEventListener('fullscreenchange', handleFullscreenChange)
-document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
-document.addEventListener('mozfullscreenchange', handleFullscreenChange)
-document.addEventListener('MSFullscreenChange', handleFullscreenChange)
-
+// Fullscreen change handler
 window.handleFullscreenChange = function () {
   const videoContainer = document.querySelector('.video-container')
   const fullscreenBtn = document.getElementById('fullscreen-btn')
@@ -751,6 +750,12 @@ window.handleFullscreenChange = function () {
     fullscreenBtn.querySelector('.material-icons').textContent = 'fullscreen'
   }
 }
+
+// Listen for fullscreen change events from browser API (after handler is defined)
+document.addEventListener('fullscreenchange', handleFullscreenChange)
+document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+document.addEventListener('MSFullscreenChange', handleFullscreenChange)
 
 // Screenshot function
 window.takeScreenshot = function () {
@@ -841,4 +846,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 5000)
     }
   }, 2000)
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/assets/service-worker.js')
+        .then(registration => {
+          console.log('Service Worker registered with scope:', registration.scope)
+        })
+        .catch(error => {
+          console.error('Service Worker registration failed:', error)
+        })
+    })
+  }
 })

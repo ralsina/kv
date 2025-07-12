@@ -9,6 +9,29 @@ class MassStorageManager
     Dir.glob("./disk-images/*").select { |fname| File.file?(fname) }
   end
 
+  # Delete a disk image
+  def delete_image(filename : String)
+    full_path = File.join("./disk-images", filename)
+    Log.info { "Attempting to delete image: #{full_path}" }
+
+    unless File.exists?(full_path)
+      return {success: false, message: "Image not found"}
+    end
+
+    if @selected_image && File.basename(@selected_image) == filename
+      return {success: false, message: "Cannot delete selected image"}
+    end
+
+    begin
+      File.delete(full_path)
+      Log.info { "Successfully deleted image: #{full_path}" }
+      {success: true, message: "Image deleted successfully"}
+    rescue ex
+      Log.error { "Failed to delete image #{full_path}: #{ex.message}" }
+      {success: false, message: "Failed to delete image: #{ex.message}"}
+    end
+  end
+
   # Attach a disk image as the USB mass storage device
   def select_image(image_path : String?)
     Log.info { "select_image called with: #{image_path.inspect}" }

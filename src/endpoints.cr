@@ -607,3 +607,21 @@ post "/api/ethernet/disable" do |env|
   result = manager.disable_ecm
   result.to_json
 end
+
+delete "/api/storage/images/:filename" do |env|
+  env.response.content_type = "application/json"
+  manager = GlobalKVM.get_manager
+  filename = env.params.url["filename"]
+  if filename.nil? || filename.strip.empty?
+    env.response.status_code = 400
+    next({success: false, message: "Filename not provided"}.to_json)
+  end
+
+  result = manager.@mass_storage.delete_image(filename)
+  if result[:success]
+    {success: true, message: result[:message]}.to_json
+  else
+    env.response.status_code = 500
+    {success: false, message: result[:message]}.to_json
+  end
+end
