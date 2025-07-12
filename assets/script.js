@@ -387,6 +387,10 @@ window.setupVideoCapture = function () {
   const videoStatusBar = document.getElementById('video-status-bar')
   const inputStatus = document.getElementById('input-status')
 
+  // Prevent duplicate handler attachment
+  if (video._kvHandlersAttached) return
+  video._kvHandlersAttached = true
+
   document.addEventListener('pointerlockchange', () => {
     pointerLocked = (document.pointerLockElement === video)
     videoFocused = pointerLocked
@@ -443,7 +447,10 @@ window.setupVideoCapture = function () {
     if (hidKey) {
       e.preventDefault()
       const modifiers = getModifiers(e)
-      window.sendCombination(modifiers, [hidKey])
+      // Only send if video is both focused and pointer locked, and event target is video
+      if (videoFocused && pointerLocked && e.target === video) {
+        window.sendCombination(modifiers, [hidKey])
+      }
     }
   })
   video.addEventListener('wheel', (e) => {
@@ -465,22 +472,23 @@ document.getElementById('text-input').addEventListener('focus', () => document.g
 
 // Global keyboard shortcuts for pasting, fullscreen and screenshot
 document.addEventListener('keydown', (e) => {
-  // Ctrl+Shift+V for paste (when not in video focus)
-  if (e.ctrlKey && e.shiftKey && e.key === 'V' && !videoFocused) {
-    e.preventDefault()
-    pasteFromClipboard()
-  }
-
-  // F11 or Ctrl+F for fullscreen toggle
-  if ((e.key === 'F11' || (e.ctrlKey && e.key === 'f')) && (videoFocused || document.fullscreenElement)) {
-    e.preventDefault()
-    window.toggleFullscreen()
-  }
-
-  // Ctrl+S or Alt+S for screenshot
-  if ((e.ctrlKey && e.key === 's') || (e.altKey && e.key === 's')) {
-    e.preventDefault()
-    takeScreenshot()
+  // Only handle global shortcuts if not focused on video
+  if (!videoFocused) {
+    // Ctrl+Shift+V for paste
+    if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+      e.preventDefault()
+      pasteFromClipboard()
+    }
+    // F11 or Ctrl+F for fullscreen toggle
+    if (e.key === 'F11' || (e.ctrlKey && e.key === 'f')) {
+      e.preventDefault()
+      window.toggleFullscreen()
+    }
+    // Ctrl+S or Alt+S for screenshot
+    if ((e.ctrlKey && e.key === 's') || (e.altKey && e.key === 's')) {
+      e.preventDefault()
+      takeScreenshot()
+    }
   }
 })
 
@@ -561,7 +569,9 @@ window.deleteUsbImage = function (filename) {
 }
 
 // Show file chooser when clicking Upload button
+// Unified DOMContentLoaded handler to avoid duplicate event handler attachment
 document.addEventListener('DOMContentLoaded', () => {
+  // Upload input handler
   const uploadInput = document.getElementById('image-upload')
   if (uploadInput) {
     uploadInput.addEventListener('change', () => {
@@ -570,6 +580,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })
   }
+
+  // Ensure sidebar summary elements are focusable for accessibility
+  document.querySelectorAll('#sidebar details > summary').forEach(summary => {
+    summary.setAttribute('tabindex', '0')
+  })
 
   // Initialize functions that need to run on page load
   loadSidebarState()
@@ -582,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateStatus, 5000)
   setInterval(measureLatency, 3000)
 
-  // Setup video capture and input handling
+  // Setup video capture and input handling (only once!)
   setupVideoCapture()
 
   // Show controls hint briefly
@@ -636,12 +651,7 @@ window.openSidebarSection = function (sectionId) {
   })
 }
 
-// Ensure sidebar summary elements are focusable for accessibility
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('#sidebar details > summary').forEach(summary => {
-    summary.setAttribute('tabindex', '0')
-  })
-})
+// (Moved to unified DOMContentLoaded handler above)
 
 // Load sidebar state from localStorage
 window.loadSidebarState = function () {
