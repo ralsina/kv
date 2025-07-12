@@ -6,6 +6,7 @@ require "./endpoints"
 require "./video_utils"
 require "baked_file_system"
 require "baked_file_handler"
+require "kemal-basic-auth"
 
 module Main
   Log = ::Log.for("main")
@@ -55,6 +56,19 @@ module Main
 
     ensure_libcomposite_loaded
     KVMManagerV4cr.perform_system_cleanup
+
+    # Basic Auth setup
+    user = ENV["KV_USER"]?
+    pass = ENV["KV_PASSWORD"]?
+    if (user && !pass) || (!user && pass)
+      Log.error { "Both KV_USER and KV_PASSWORD must be set for basic authentication." }
+      exit 1
+    elsif user && pass
+      Log.info { "🔒 Basic authentication enabled (user: #{user})" }
+      basic_auth user, pass
+    else
+      Log.info { "🔓 Basic authentication is disabled (KV_USER and KV_PASSWORD not set)" }
+    end
 
     # Global KVM manager with configurable parameters
     video_device = ""       # Will be auto-detected if not specified

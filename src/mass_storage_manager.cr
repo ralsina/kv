@@ -18,7 +18,7 @@ class MassStorageManager
       return {success: false, message: "Image not found"}
     end
 
-    if @selected_image && File.basename(@selected_image) == filename
+    if @selected_image && File.basename(@selected_image.as(String)) == filename
       return {success: false, message: "Cannot delete selected image"}
     end
 

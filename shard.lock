@@ -20,6 +20,10 @@ shards:
     git: https://github.com/kemalcr/kemal.git
     version: 1.7.1
 
+  kemal-basic-auth:
+    git: https://github.com/kemalcr/kemal-basic-auth.git
+    version: 1.0.0
+
   opus:
     git: https://github.com/krthr/opus.git
     version: 0.1.0
