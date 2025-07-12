@@ -1,0 +1,43 @@
+.video-quality-menu {
+  position: absolute;
+  top: 48px;
+  right: 8px;
+  background: #222;
+  color: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  z-index: 1001;
+  min-width: 180px;
+  padding: 0.5em 0;
+  font-size: 1em;
+  display: none;
+}
+.video-quality-menu.active {
+  display: block;
+}
+.video-quality-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.video-quality-menu li {
+  padding: 0.5em 1.5em 0.5em 2.5em;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s;
+}
+.video-quality-menu li.selected {
+  background: #333;
+  font-weight: bold;
+}
+.video-quality-menu li:hover {
+  background: #444;
+}
+.video-quality-menu li .material-icons {
+  position: absolute;
+  left: 0.5em;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.2em;
+  color: #4ade80;
+}
