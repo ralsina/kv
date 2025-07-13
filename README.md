@@ -47,6 +47,8 @@ a normal HDMI cable.
 
 You can ignore the black cable, that's monitor output for the SBC and you would normally not have it.
 
+More details in [docs/handbook.md](docs/handbook.md).
+
 ## Development
 
 Details to be explained
