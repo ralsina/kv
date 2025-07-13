@@ -33,7 +33,7 @@ post "/api/video/quality" do |env|
     quality = body["quality"]?.try(&.as_s)
     if !quality || quality.strip.empty?
       {success: false, message: "No quality specified"}.to_json
-    elsif !manager.available_qualities.includes?(quality)
+    elsif !quality.starts_with?("jpeg:") && !manager.available_qualities.includes?(quality)
       {success: false, message: "Unsupported quality"}.to_json
     else
       ok = manager.video_quality = quality

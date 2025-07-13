@@ -29,7 +29,9 @@ end
 # Updated KVM manager using V4cr for video capture instead of FFmpeg
 class KVMManagerV4cr
   def available_qualities : Array(String)
-    @detected_qualities
+    # Include a dummy "jpeg" entry to allow JPEG quality changes to pass validation
+    # The actual JPEG quality is handled separately in video_quality=
+    @detected_qualities + ["jpeg"]
   end
 
   def selected_quality : String
@@ -54,10 +56,14 @@ class KVMManagerV4cr
             Log.warn { "JPEG quality out of range: #{new_quality}" }
             return false
           end
+        else
+          Log.warn { "Invalid JPEG quality value: #{parts[1]}" }
+          return false
         end
+      else
+        Log.warn { "Invalid JPEG quality format: #{quality}" }
+        return false
       end
-      Log.warn { "Invalid JPEG quality format: #{quality}" }
-      return false
     end
 
     # Handle resolution change (e.g., "1280x720@30")
