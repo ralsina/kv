@@ -3,6 +3,7 @@ require "./mouse"
 require "./composite"
 require "./mass_storage_manager"
 require "./video_capture"
+require "./audio_streamer"
 require "kemal"
 require "file_utils"
 
@@ -159,11 +160,13 @@ class KVMManagerV4cr
   @video_capture : V4crVideoCapture
   @video_jpeg_quality : Int32 = 100
   @detected_qualities : Array(String)
+  @audio_streamer : AudioStreamer
 
   def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, ecm_enabled = false)
     @ecm_enabled = ecm_enabled
     @mass_storage = MassStorageManager.new
     @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
+    @audio_streamer = AudioStreamer.new(@audio_device)
 
     # Detect available qualities from the video device
     detected_quality_objects = [] of {width: UInt32, height: UInt32, fps: Int32}
@@ -253,6 +256,20 @@ class KVMManagerV4cr
     Log.info { "Stopping V4cr video stream..." }
     @video_capture.stop_streaming
     Log.info { "V4cr video stream stopped" }
+  end
+
+  def start_audio_stream(output_io : IO)
+    Log.info { "Starting audio stream..." }
+    @audio_streamer.start_streaming(output_io)
+  end
+
+  def stop_audio_stream
+    Log.info { "Stopping audio stream..." }
+    @audio_streamer.stop_streaming
+  end
+
+  def audio_running?
+    @audio_streamer.running?
   end
 
   def video_running?
@@ -452,6 +469,7 @@ class KVMManagerV4cr
   def cleanup
     Log.info { "Shutting down and cleaning up KVM resources..." }
     stop_video_stream
+    stop_audio_stream
     @mass_storage.cleanup
     HIDComposite.cleanup_all_gadgets
     Log.info { "KVM shutdown cleanup complete." }
