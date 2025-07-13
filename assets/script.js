@@ -1,3 +1,33 @@
+// --- Toast Notification System ---
+function showToast (message, type = 'error') {
+  let toast = document.getElementById('toast-notification')
+  if (!toast) {
+    toast = document.createElement('div')
+    toast.id = 'toast-notification'
+    toast.style.position = 'fixed'
+    toast.style.bottom = '32px'
+    toast.style.left = '50%'
+    toast.style.transform = 'translateX(-50%)'
+    toast.style.background = 'rgba(40,40,40,0.97)'
+    toast.style.color = 'white'
+    toast.style.padding = '12px 28px'
+    toast.style.borderRadius = '6px'
+    toast.style.fontSize = '1.1em'
+    toast.style.zIndex = '9999'
+    toast.style.boxShadow = '0 2px 12px rgba(0,0,0,0.2)'
+    toast.style.display = 'none'
+    toast.style.transition = 'opacity 0.4s ease'
+    document.body.appendChild(toast)
+  }
+  toast.textContent = message
+  toast.style.background = type === 'error' ? 'rgba(200,40,40,0.97)' : (type === 'success' ? 'rgba(40,160,40,0.97)' : 'rgba(40,40,40,0.97)')
+  toast.style.display = 'block'
+  toast.style.opacity = '1'
+  setTimeout(() => {
+    toast.style.opacity = '0'
+    setTimeout(() => { toast.style.display = 'none' }, 400)
+  }, 3500)
+}
 // --- DRY Principle: Unified fetch helper for API calls with consistent error handling ---
 function apiFetch (endpoint, options = {}, onSuccess, onError) {
   fetch(endpoint, options)
@@ -8,7 +38,7 @@ function apiFetch (endpoint, options = {}, onSuccess, onError) {
     .then(data => {
       if (data && data.success === false) {
         if (onError) onError(data)
-        else alert('API error: ' + (data.message || 'Unknown error'))
+        else showToast('API error: ' + (data.message || 'Unknown error'), 'error')
         console.error('API error:', data)
         return
       }
@@ -16,7 +46,7 @@ function apiFetch (endpoint, options = {}, onSuccess, onError) {
     })
     .catch(error => {
       if (onError) onError(error)
-      else alert('Error: ' + error.message)
+      else showToast('Error: ' + error.message, 'error')
       console.error('API fetch error:', error)
     })
 }
@@ -222,7 +252,7 @@ window.changeVideoQuality = function (quality) {
       setTimeout(() => updateStatus(), 1000)
     },
     (err) => {
-      alert('Failed to change video quality: ' + (err.message || err?.message || 'Unknown error'))
+      showToast('Failed to change video quality: ' + (err.message || err?.message || 'Unknown error'), 'error')
       console.error('Error changing video quality:', err)
     }
   )
@@ -242,7 +272,7 @@ window.setEthernet = function (enable) {
     },
     () => updateStatus(),
     (err) => {
-      alert('Failed to set ethernet: ' + (err.message || err?.message || 'Unknown error'))
+      showToast('Failed to set ethernet: ' + (err.message || err?.message || 'Unknown error'), 'error')
       console.error('Failed to set ethernet:', err)
     }
   )
@@ -451,7 +481,7 @@ window.updateStatus = function () {
       }
     })
     .catch(error => {
-      alert('Error updating status: ' + error.message)
+      showToast('Error updating status: ' + error.message, 'error')
       console.error('Error updating status:', error)
       document.getElementById('video-status').innerHTML = '<span class="material-icons">monitor</span>'
       document.getElementById('keyboard-status').innerHTML = '<span class="material-icons">keyboard</span>'
@@ -490,7 +520,7 @@ window.measureLatency = function () {
       else indicator.classList.add('bad')
     })
     .catch(error => {
-      alert('Error measuring latency: ' + error.message)
+      showToast('Error measuring latency: ' + error.message, 'error')
       console.error('Error measuring latency:', error)
       document.getElementById('latency-indicator').textContent = '♾️ --ms'
       document.getElementById('latency-indicator').className = 'latency-indicator bad'
@@ -537,12 +567,12 @@ window.sendApiRequest = function (endpoint, body) {
     })
     .then(data => {
       if (!data.success) {
-        alert(`Request to ${endpoint} failed: ${data.message || 'Unknown error'}`)
+        showToast(`Request to ${endpoint} failed: ${data.message || 'Unknown error'}`, 'error')
         console.error(`Request to ${endpoint} failed:`, data.message)
       }
     })
     .catch(error => {
-      alert(`Error sending to ${endpoint}: ${error.message}`)
+      showToast(`Error sending to ${endpoint}: ${error.message}`, 'error')
       console.error(`Error sending to ${endpoint}:`, error)
     })
 }
@@ -740,7 +770,7 @@ window.refreshUsbImages = function () {
     },
     (err) => {
       document.getElementById('usb-image-list').innerHTML = '<em>Error loading disk images</em>'
-      alert('Error loading disk images: ' + (err.message || err?.message || 'Unknown error'))
+      showToast('Error loading disk images: ' + (err.message || err?.message || 'Unknown error'), 'error')
       console.error('Error loading disk images:', err)
     }
   )
@@ -756,7 +786,7 @@ window.selectUsbImage = function (image) {
     },
     () => setTimeout(() => { refreshUsbImages(); updateStatus() }, 300),
     (err) => {
-      alert('Failed to select USB image: ' + (err.message || err?.message || 'Unknown error'))
+      showToast('Failed to select USB image: ' + (err.message || err?.message || 'Unknown error'), 'error')
       console.error('Error selecting USB image:', err)
     }
   )
@@ -772,7 +802,7 @@ window.detachUsbImage = function () {
     },
     () => setTimeout(() => { refreshUsbImages(); updateStatus() }, 300),
     (err) => {
-      alert('Failed to detach USB image: ' + (err.message || err?.message || 'Unknown error'))
+      showToast('Failed to detach USB image: ' + (err.message || err?.message || 'Unknown error'), 'error')
       console.error('Error detaching USB image:', err)
     }
   )
@@ -788,15 +818,15 @@ window.deleteUsbImage = function (filename) {
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        alert(data.message)
+        showToast(data.message, data.success ? 'success' : 'error')
         refreshUsbImages()
       } else {
-        alert(`Failed to delete image: ${data.message}`)
+        showToast(`Failed to delete image: ${data.message}`, 'error')
       }
     })
     .catch(error => {
       console.error('Error deleting USB image:', error)
-      alert('Error deleting USB image.')
+      showToast('Error deleting USB image.', 'error')
     })
 }
 
@@ -901,6 +931,6 @@ window.takeScreenshot = function () {
     }, 2000)
   } catch (error) {
     console.error('Error taking screenshot:', error)
-    alert('Failed to take screenshot. This may be due to security restrictions.')
+    showToast('Failed to take screenshot. This may be due to security restrictions.', 'error')
   }
 }
