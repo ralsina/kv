@@ -59,14 +59,14 @@ module HIDComposite
     vendor_id : String = "0x16c0",
     product_id : String = "0x048a",
     manufacturer : String = "Gadget",
-    product : String = "Radxa KVM Composite",
+    product : String = "KV KVM Composite",
     serial : String = "fedcba9876543212",
     enable_mass_storage : Bool = false,
     storage_file : String? = nil,
     enable_ecm : Bool = false,
   )
     Log.debug { "setup_usb_composite_gadget called with enable_mass_storage=#{enable_mass_storage.inspect}, storage_file=#{storage_file.inspect}, enable_ecm=#{enable_ecm.inspect}" }
-    gadget = "odroidc2_composite" # Composite gadget name
+    gadget = "kv_composite" # Composite gadget name
     base = "/sys/kernel/config/usb_gadget/" + gadget
 
     # Check if USB gadget configfs is available
