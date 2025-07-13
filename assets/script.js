@@ -591,29 +591,6 @@ window.setupInputWebSocket = function () {
 }
 setupInputWebSocket()
 
-// Fallback for non-input endpoints (text, storage, etc)
-window.sendApiRequest = function (endpoint, body) {
-  fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
-    .then(response => {
-      if (!response.ok) throw new Error('Network response was not ok')
-      return response.json().catch(() => ({}))
-    })
-    .then(data => {
-      if (!data.success) {
-        showToast(`Request to ${endpoint} failed: ${data.message || 'Unknown error'}`, 'error')
-        console.error(`Request to ${endpoint} failed:`, data.message)
-      }
-    })
-    .catch(error => {
-      showToast(`Error sending to ${endpoint}: ${error.message}`, 'error')
-      console.error(`Error sending to ${endpoint}:`, error)
-    })
-}
-
 // Input event senders (now use WebSocket)
 window.sendKey = function (key) { wsSendInput({ type: 'key_press', key }) }
 window.sendCombination = function (modifiers, keys) { wsSendInput({ type: 'key_combination', modifiers, keys }) }
@@ -635,7 +612,7 @@ window.sendText = function () {
   const textInput = document.getElementById('text-input')
   const text = textInput.value.trim()
   if (!text) return
-  sendApiRequest('/api/keyboard/text', { text })
+  wsSendInput({ type: 'text', text })
   textInput.value = ''
 }
 
@@ -643,7 +620,7 @@ window.pasteFromClipboard = async function () {
   try {
     const text = await navigator.clipboard.readText()
     if (text) {
-      sendApiRequest('/api/keyboard/text', { text })
+      wsSendInput({ type: 'text', text })
       console.log('Pasted text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''))
     }
   } catch (err) {
@@ -651,7 +628,7 @@ window.pasteFromClipboard = async function () {
     // Fallback: show a prompt for manual paste
     const text = prompt('Paste your text here (automatic clipboard access not available):')
     if (text) {
-      sendApiRequest('/api/keyboard/text', { text })
+      wsSendInput({ type: 'text', text })
     }
   }
 }
@@ -772,7 +749,7 @@ window.setupVideoCapture = function () {
     if (!videoFocused) return
     e.preventDefault()
     const text = e.clipboardData.getData('text')
-    if (text) sendApiRequest('/api/keyboard/text', { text })
+    if (text) wsSendInput({ type: 'text', text })
   })
 }
 

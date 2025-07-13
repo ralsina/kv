@@ -6,6 +6,25 @@ require "./video_capture"
 require "kemal"
 require "file_utils"
 
+# Global KVM manager module
+module GlobalKVM
+  Log = ::Log.for(self)
+
+  @@manager : KVMManagerV4cr?
+
+  def self.manager=(manager : KVMManagerV4cr)
+    @@manager = manager
+  end
+
+  def self.manager
+    if manager = @@manager
+      manager
+    else
+      raise "KVM manager not initialized"
+    end
+  end
+end
+
 # Updated KVM manager using V4cr for video capture instead of FFmpeg
 class KVMManagerV4cr
   def available_qualities : Array(String)
