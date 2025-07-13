@@ -390,6 +390,7 @@ class KVMManagerV4cr
                        capture_type:     "v4cr",
                        qualities:        available_qualities,
                        selected_quality: selected_quality,
+                       jpeg_quality:     @video_jpeg_quality,
                      }
                    else
                      {
@@ -397,6 +398,7 @@ class KVMManagerV4cr
                        capture_type:     "v4cr",
                        qualities:        available_qualities,
                        selected_quality: selected_quality,
+                       jpeg_quality:     @video_jpeg_quality,
                      }
                    end
 

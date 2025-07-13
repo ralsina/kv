@@ -40,6 +40,10 @@ shards:
     git: https://github.com/stumpycr/stumpy_core.git
     version: 1.9.1
 
+  turbojpeg:
+    git: https://github.com/zuf/turbojpeg.cr.git
+    version: 0.1.0+git.commit.97ff3851fcec4dd1114a1ae2a8c27382acc851b2
+
   v4cr:
     git: https://github.com/ralsina/v4cr.git
     version: 0.1.0+git.commit.61ad7e4bd19376ac9edaf29668cb3e6d4b952587

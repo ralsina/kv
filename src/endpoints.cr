@@ -4,12 +4,12 @@ post "/api/video/quality" do |env|
   begin
     body = JSON.parse((env.request.body.try &.gets_to_end).to_s)
     quality = body["quality"]?.try(&.as_s)
+    Log.info { "Received video quality request: #{quality}" }
     if !quality || quality.strip.empty?
       {success: false, message: "No quality specified"}.to_json
-    elsif !manager.available_qualities.includes?(quality)
-      {success: false, message: "Unsupported quality"}.to_json
     else
       ok = manager.video_quality = quality
+      Log.info { "Setting video quality result: #{ok}" }
       if ok
         {success: true, message: "Video quality set", selected: manager.selected_quality}.to_json
       else
@@ -17,6 +17,7 @@ post "/api/video/quality" do |env|
       end
     end
   rescue ex
+    Log.error(exception: ex) { "Error in /api/video/quality: #{ex.message}" }
     {success: false, message: "Invalid request: #{ex.message}"}.to_json
   end
 end

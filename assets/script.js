@@ -215,10 +215,13 @@ function hideVideoQualityMenu () {
   if (menu) menu.classList.remove('active')
 }
 
-function updateVideoQualityMenu (qualities, selected) {
+function updateVideoQualityMenu (qualities, selected, jpegQuality) {
+  console.log('JPEG Quality received in updateVideoQualityMenu:', jpegQuality)
   const list = document.getElementById('video-quality-list')
   if (!list) return
   list.innerHTML = ''
+
+  // Resolution options
   qualities.forEach(q => {
     const li = document.createElement('li')
     li.textContent = q
@@ -234,6 +237,39 @@ function updateVideoQualityMenu (qualities, selected) {
     }
     list.appendChild(li)
   })
+
+  // Separator
+  const separator = document.createElement('li')
+  separator.className = 'separator'
+  list.appendChild(separator)
+
+  // JPEG Quality submenu
+  const jpegLi = document.createElement('li')
+  jpegLi.className = 'has-submenu'
+  jpegLi.innerHTML = '<span>JPEG Quality</span><span class="submenu-icon">»</span>'
+  const submenu = document.createElement('ul')
+  submenu.className = 'submenu'
+
+  const jpegQualities = [100, 75, 50, 25]
+  jpegQualities.forEach(q => {
+    const subLi = document.createElement('li')
+    subLi.textContent = `${q}%`
+    if (q === jpegQuality) {
+      subLi.classList.add('selected')
+      subLi.innerHTML = '<span class="material-icons">check</span>' + subLi.innerHTML
+    }
+    subLi.onclick = (e) => {
+      e.stopPropagation()
+      if (q !== jpegQuality) {
+        window.changeVideoQuality(`jpeg:${q}`)
+      }
+      hideVideoQualityMenu()
+    }
+    submenu.appendChild(subLi)
+  })
+
+  jpegLi.appendChild(submenu)
+  list.appendChild(jpegLi)
 }
 
 // --- Video Quality Selection ---
@@ -380,6 +416,7 @@ window.updateStatus = function () {
       return response.json().catch(() => ({}))
     })
     .then(data => {
+      console.log('API Status Data:', data) // Add this line
       // ECM/Ethernet sidebar indicator and controls
       const eth = data.ecm || data.ethernet
       const ethStatus = document.getElementById('ethernet-status-label')
@@ -434,7 +471,7 @@ window.updateStatus = function () {
 
       // Update video quality menu
       if (data.video && data.video.qualities) {
-        updateVideoQualityMenu(data.video.qualities, data.video.selected_quality)
+        updateVideoQualityMenu(data.video.qualities, data.video.selected_quality, data.video.jpeg_quality)
       }
 
       // ECM/Ethernet status bar (icon-only, color for status)
