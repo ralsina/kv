@@ -122,3 +122,25 @@ Would it work using a Raspberry Pi as a KVM?
 Honestly, the cheapest Radxa Zero is probably cheaper than a Pi Zero 2W, is much faster and has 2 ports.
 
 Let me know if you make it work on other hardware!
+
+## Security and Remote Access
+
+First of all: `kv` does not currently nor will it ever "call home". Why? Because I don't care what you do
+with it. It's open source code, so you can look at it, it literally has no code in it to do anything other
+than what it says it does.
+
+On the other hand, you want two things from a remote KVM solution:
+
+1) You want to connect to it securely and not let others access it.
+2) You want to connect to it remotely, not just from the local network.
+
+For 1:
+
+* `kv` supports basic authentication, so you can set a user and password
+* **IMPORTANT** `kv` has no secure transport. If you don't want someone
+  to sniff your password, you should use a HTTPS terminating proxy in
+  front of it.
+
+For 2:
+
+Your KVM is a freaking computer, setup a VPN. I use tailscale.
