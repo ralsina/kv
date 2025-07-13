@@ -1,3 +1,25 @@
+// --- DRY Principle: Unified fetch helper for API calls with consistent error handling ---
+function apiFetch (endpoint, options = {}, onSuccess, onError) {
+  fetch(endpoint, options)
+    .then(response => {
+      if (!response.ok) throw new Error('Network response was not ok')
+      return response.json().catch(() => ({}))
+    })
+    .then(data => {
+      if (data && data.success === false) {
+        if (onError) onError(data)
+        else alert('API error: ' + (data.message || 'Unknown error'))
+        console.error('API error:', data)
+        return
+      }
+      if (onSuccess) onSuccess(data)
+    })
+    .catch(error => {
+      if (onError) onError(error)
+      else alert('Error: ' + error.message)
+      console.error('API fetch error:', error)
+    })
+}
 // Initialization on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
   // Upload input handler
@@ -21,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
   updateStatus()
   measureLatency()
   refreshUsbImages()
-  window.loadVideoQualities()
 
   // Set up periodic updates
   setInterval(updateStatus, 5000)
@@ -186,31 +207,25 @@ function updateVideoQualityMenu (qualities, selected) {
 }
 
 // --- Video Quality Selection ---
-window.loadVideoQualities = function () {
-  fetch('/api/status')
-    .then(res => res.json())
-    .then(data => {
-      if (data.video && data.video.qualities) {
-        // This function seems to target a legacy dropdown.
-        // The new menu is updated via updateStatus -> updateVideoQualityMenu
-        const select = document.getElementById('video-quality-select')
-        if (select) {
-          select.innerHTML = data.video.qualities.map(q => `<option value="${q}"${q === data.video.selected_quality ? ' selected' : ''}>${q}</option>`).join('')
-        }
-      }
-    })
-}
+// window.loadVideoQualities is no longer needed and has been removed.
 
 window.changeVideoQuality = function (quality) {
-  fetch('/api/video/quality', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ quality })
-  }).then(() => {
-    // Reload video stream after a short delay
-    setTimeout(() => initializeVideo(), 500)
-    setTimeout(() => updateStatus(), 1000)
-  })
+  apiFetch(
+    '/api/video/quality',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quality })
+    },
+    () => {
+      setTimeout(() => initializeVideo(), 500)
+      setTimeout(() => updateStatus(), 1000)
+    },
+    (err) => {
+      alert('Failed to change video quality: ' + (err.message || err?.message || 'Unknown error'))
+      console.error('Error changing video quality:', err)
+    }
+  )
 }
 
 /* eslint-disable no-unused-vars */
@@ -219,17 +234,18 @@ window.changeVideoQuality = function (quality) {
 
 // ECM/Ethernet enable/disable controls
 window.setEthernet = function (enable) {
-  fetch('/api/ethernet/' + (enable ? 'enable' : 'disable'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  })
-    .then(response => response.json())
-    .then(data => {
-      updateStatus()
-    })
-    .catch(error => {
-      console.error('Failed to set ethernet:', error)
-    })
+  apiFetch(
+    '/api/ethernet/' + (enable ? 'enable' : 'disable'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    },
+    () => updateStatus(),
+    (err) => {
+      alert('Failed to set ethernet: ' + (err.message || err?.message || 'Unknown error'))
+      console.error('Failed to set ethernet:', err)
+    }
+  )
 }
 
 // --- Audio ---
@@ -329,7 +345,10 @@ window.initializeVideo = function () {
 
 window.updateStatus = function () {
   fetch('/api/status')
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error('Network response was not ok')
+      return response.json().catch(() => ({}))
+    })
     .then(data => {
       // ECM/Ethernet sidebar indicator and controls
       const eth = data.ecm || data.ethernet
@@ -372,7 +391,7 @@ window.updateStatus = function () {
       const mouseStatus = document.getElementById('mouse-status')
       const storageStatus = document.getElementById('storage-status')
 
-      if (data.video.status === 'running') {
+      if (data.video && data.video.status === 'running') {
         videoStatus.innerHTML = `<span class="material-icons">videocam</span>Live (${data.video.resolution}@${data.video.fps}fps)`
         videoStatus.classList.add('good')
       } else {
@@ -381,19 +400,11 @@ window.updateStatus = function () {
       }
 
       // Update FPS indicator with server-reported FPS
-      updateFpsIndicator(data.video.actual_fps)
+      updateFpsIndicator(data.video ? data.video.actual_fps : undefined)
 
       // Update video quality menu
       if (data.video && data.video.qualities) {
         updateVideoQualityMenu(data.video.qualities, data.video.selected_quality)
-      }
-
-      // Update video quality dropdown if present (legacy)
-      if (data.video.qualities && Array.isArray(data.video.qualities)) {
-        const select = document.getElementById('video-quality-select')
-        if (select) {
-          select.innerHTML = data.video.qualities.map(q => `<option value="${q}"${q === data.video.selected_quality ? ' selected' : ''}>${q}</option>`).join('')
-        }
       }
 
       // ECM/Ethernet status bar (icon-only, color for status)
@@ -414,7 +425,7 @@ window.updateStatus = function () {
       }
 
       // Keyboard status (icon only)
-      if (data.keyboard.enabled) {
+      if (data.keyboard && data.keyboard.enabled) {
         keyboardStatus.innerHTML = '<span class="material-icons good">keyboard</span>'
         keyboardStatus.className = 'good'
       } else {
@@ -423,7 +434,7 @@ window.updateStatus = function () {
       }
 
       // Mouse status (icon only)
-      if (data.mouse.enabled) {
+      if (data.mouse && data.mouse.enabled) {
         mouseStatus.innerHTML = '<span class="material-icons good">mouse</span>'
         mouseStatus.className = 'good'
       } else {
@@ -440,7 +451,8 @@ window.updateStatus = function () {
       }
     })
     .catch(error => {
-      console.error('Error:', error)
+      alert('Error updating status: ' + error.message)
+      console.error('Error updating status:', error)
       document.getElementById('video-status').innerHTML = '<span class="material-icons">monitor</span>'
       document.getElementById('keyboard-status').innerHTML = '<span class="material-icons">keyboard</span>'
       document.getElementById('mouse-status').innerHTML = '<span class="material-icons">mouse</span>'
@@ -463,7 +475,10 @@ window.updateStatus = function () {
 window.measureLatency = function () {
   const startTime = performance.now()
   fetch('/api/latency-test')
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error('Network response was not ok')
+      return response.json().catch(() => ({}))
+    })
     .then(data => {
       const endTime = performance.now()
       const latency = Math.round(endTime - startTime)
@@ -475,6 +490,7 @@ window.measureLatency = function () {
       else indicator.classList.add('bad')
     })
     .catch(error => {
+      alert('Error measuring latency: ' + error.message)
       console.error('Error measuring latency:', error)
       document.getElementById('latency-indicator').textContent = '♾️ --ms'
       document.getElementById('latency-indicator').className = 'latency-indicator bad'
@@ -515,11 +531,20 @@ window.sendApiRequest = function (endpoint, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
-    .then(response => response.json())
-    .then(data => {
-      if (!data.success) console.error(`Request to ${endpoint} failed:`, data.message)
+    .then(response => {
+      if (!response.ok) throw new Error('Network response was not ok')
+      return response.json().catch(() => ({}))
     })
-    .catch(error => console.error(`Error sending to ${endpoint}:`, error))
+    .then(data => {
+      if (!data.success) {
+        alert(`Request to ${endpoint} failed: ${data.message || 'Unknown error'}`)
+        console.error(`Request to ${endpoint} failed:`, data.message)
+      }
+    })
+    .catch(error => {
+      alert(`Error sending to ${endpoint}: ${error.message}`)
+      console.error(`Error sending to ${endpoint}:`, error)
+    })
 }
 
 // Input event senders (now use WebSocket)
@@ -686,9 +711,10 @@ window.setupVideoCapture = function () {
 
 // --- USB Mass Storage ---
 window.refreshUsbImages = function () {
-  fetch('/api/storage/images')
-    .then(response => response.json())
-    .then(data => {
+  apiFetch(
+    '/api/storage/images',
+    {},
+    (data) => {
       const container = document.getElementById('usb-image-list')
       if (data.success && data.images) {
         if (data.images.length === 0) {
@@ -711,29 +737,45 @@ window.refreshUsbImages = function () {
       } else {
         container.innerHTML = '<em>Error loading disk images</em>'
       }
-    })
-    .catch(error => {
-      console.error('Error loading disk images:', error)
+    },
+    (err) => {
       document.getElementById('usb-image-list').innerHTML = '<em>Error loading disk images</em>'
-    })
+      alert('Error loading disk images: ' + (err.message || err?.message || 'Unknown error'))
+      console.error('Error loading disk images:', err)
+    }
+  )
 }
 
 window.selectUsbImage = function (image) {
-  fetch('/api/storage/select', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image })
-  })
-    .then(() => { setTimeout(() => { refreshUsbImages(); updateStatus() }, 300) })
-    .catch(error => console.error('Error selecting USB image:', error))
+  apiFetch(
+    '/api/storage/select',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image })
+    },
+    () => setTimeout(() => { refreshUsbImages(); updateStatus() }, 300),
+    (err) => {
+      alert('Failed to select USB image: ' + (err.message || err?.message || 'Unknown error'))
+      console.error('Error selecting USB image:', err)
+    }
+  )
 }
 
 window.detachUsbImage = function () {
-  fetch('/api/storage/select', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: null })
-  }).then(() => { setTimeout(() => { refreshUsbImages(); updateStatus() }, 300) }).catch(error => console.error('Error detaching USB image:', error))
+  apiFetch(
+    '/api/storage/select',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: null })
+    },
+    () => setTimeout(() => { refreshUsbImages(); updateStatus() }, 300),
+    (err) => {
+      alert('Failed to detach USB image: ' + (err.message || err?.message || 'Unknown error'))
+      console.error('Error detaching USB image:', err)
+    }
+  )
 }
 
 window.deleteUsbImage = function (filename) {
