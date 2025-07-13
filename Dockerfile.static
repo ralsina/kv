@@ -23,7 +23,8 @@ RUN apk add --no-cache \
     automake \
     autoconf \
     make \
-    linux-headers
+    linux-headers \
+    libjpeg-turbo-static
 
 WORKDIR /app
 RUN rm -rf alsa-lib ogg opus
