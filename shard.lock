@@ -28,9 +28,17 @@ shards:
     git: https://github.com/krthr/opus.git
     version: 0.1.0
 
+  pluto:
+    git: https://github.com/phenopolis/pluto.git
+    version: 1.0.1
+
   radix:
     git: https://github.com/luislavena/radix.git
     version: 0.4.1
+
+  stumpy_core:
+    git: https://github.com/stumpycr/stumpy_core.git
+    version: 1.9.1
 
   v4cr:
     git: https://github.com/ralsina/v4cr.git

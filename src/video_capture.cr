@@ -1,5 +1,7 @@
 require "v4cr"
 require "log"
+require "pluto"
+require "pluto/format/jpeg"
 
 # V4cr-based video capture module to replace FFmpeg
 class V4crVideoCapture
@@ -13,6 +15,7 @@ class V4crVideoCapture
   @frame_count : Int32 = 0
   @actual_fps : Float64 = 0.0
   @last_fps_time : Time::Span = Time.monotonic
+  @quality : Int32 = 100
 
   MJPEG_BOUNDARY = "--mjpegboundary"
 
@@ -154,14 +157,36 @@ class V4crVideoCapture
     @actual_fps
   end
 
+  def quality=(new_quality : Int32)
+    @quality = new_quality
+  end
+
+  private def reencode_frame(frame_data : Bytes) : Bytes
+    return frame_data if @quality == 100
+
+    begin
+      io = IO::Memory.new(frame_data)
+      image = Pluto::ImageRGBA.from_jpeg(io)
+
+      output_io = IO::Memory.new
+      image.to_jpeg(output_io, @quality)
+      output_io.rewind
+      output_io.gets_to_end.to_slice
+    rescue ex
+      Log.error(exception: ex) { "Failed to re-encode frame" }
+      frame_data
+    end
+  end
+
   private def broadcast_frame(frame_data : Bytes)
+    reencoded_data = reencode_frame(frame_data)
     @clients_mutex.synchronize do
       # We dup the data because each channel receive might happen at a different time.
       # This prevents one fiber from seeing data that another fiber has already modified
       # if we were passing a mutable buffer. Slices are structs, but the underlying
       # pointer could be an issue if not duped.
       @clients.each do |client|
-        client.send(frame_data.dup)
+        client.send(reencoded_data.dup)
       end
     end
   end

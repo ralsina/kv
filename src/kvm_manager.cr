@@ -8,21 +8,8 @@ require "file_utils"
 
 # Updated KVM manager using V4cr for video capture instead of FFmpeg
 class KVMManagerV4cr
-  # Supported video qualities (resolution@fps)
-  @@available_qualities = [
-    "1920x1080@30",
-    "1280x720@30",
-    "1024x768@30",
-    "800x600@30",
-    "640x480@30",
-  ] of String
-
-  def self.available_qualities : Array(String)
-    @@available_qualities
-  end
-
   def available_qualities : Array(String)
-    @@available_qualities
+    @detected_qualities
   end
 
   def selected_quality : String
@@ -31,24 +18,52 @@ class KVMManagerV4cr
 
   # Change video quality (resolution@fps string)
   def video_quality=(quality : String) : Bool
-    # Parse e.g. "1280x720@30"
-    if match = quality.match(/(\d+)x(\d+)@(\d+)/)
-      width = match[1].to_u32
-      height = match[2].to_u32
-      fps = match[3].to_i32
-      # Only restart if different
-      if width != @width || height != @height || fps != @fps
-        stop_video_stream
-        @width = width
-        @height = height
-        @fps = fps
-        @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
-        start_video_stream
+    Log.info { "Attempting to set video quality to: #{quality}" }
+
+    # Handle JPEG quality change (e.g., "jpeg:80")
+    if quality.starts_with?("jpeg:")
+      parts = quality.split(':')
+      if parts.size == 2
+        if new_quality = parts[1].to_i?
+          if new_quality >= 1 && new_quality <= 100
+            @video_jpeg_quality = new_quality
+            @video_capture.quality = @video_jpeg_quality
+            Log.info { "Successfully set video JPEG quality to #{@video_jpeg_quality}" }
+            return true
+          else
+            Log.warn { "JPEG quality out of range: #{new_quality}" }
+            return false
+          end
+        end
       end
-      true
-    else
-      false
+      Log.warn { "Invalid JPEG quality format: #{quality}" }
+      return false
     end
+
+    # Handle resolution change (e.g., "1280x720@30")
+    if @detected_qualities.includes?(quality)
+      if match = quality.match(/(\d+)x(\d+)@(\d+)/)
+        width = match[1].to_u32
+        height = match[2].to_u32
+        fps = match[3].to_i32
+
+        if width != @width || height != @height || fps != @fps
+          Log.info { "Changing resolution to #{width}x#{height}@#{fps}" }
+          stop_video_stream
+          @width = width
+          @height = height
+          @fps = fps
+          @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
+          start_video_stream
+        else
+          Log.info { "Resolution is already set to #{quality}, no change needed." }
+        end
+        return true
+      end
+    end
+
+    Log.warn { "Unsupported quality string: #{quality}" }
+    false
   end
 
   # Upload and decompress a disk image, always storing as .img
@@ -123,11 +138,40 @@ class KVMManagerV4cr
   @pressed_buttons = Set(String).new
   @mass_storage : MassStorageManager
   @video_capture : V4crVideoCapture
+  @video_jpeg_quality : Int32 = 100
+  @detected_qualities : Array(String)
 
   def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, ecm_enabled = false)
     @ecm_enabled = ecm_enabled
     @mass_storage = MassStorageManager.new
     @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
+
+    # Detect available qualities from the video device
+    detected_quality_objects = [] of {width: UInt32, height: UInt32, fps: Int32}
+    if device_info = V4crVideoUtils.detect_device_info(@video_device)
+      device_info.resolutions.each do |res_str|
+        if match = res_str.match(/(\d+)x(\d+)/)
+          width = match[1].to_u32
+          height = match[2].to_u32
+          detected_quality_objects << {width: width, height: height, fps: device_info.max_fps}
+        end
+      end
+    end
+
+    # Sort qualities: highest resolution first, then highest FPS
+    @detected_qualities = detected_quality_objects.uniq.sort_by! do |quality_obj|
+      # Sort by width (desc), then height (desc), then fps (desc)
+      [-quality_obj[:width].to_i32, -quality_obj[:height].to_i32, -quality_obj[:fps].to_i32]
+    end.map do |quality_obj|
+      "#{quality_obj[:width]}x#{quality_obj[:height]}@#{quality_obj[:fps]}"
+    end
+
+    # If no qualities detected, fall back to a default or raise error
+    if @detected_qualities.empty?
+      Log.warn { "No video qualities detected for #{@video_device}. Falling back to 640x480@30." }
+      @detected_qualities << "640x480@30"
+    end
+
     setup_hid_devices
     start_video_stream # Start video automatically
   end

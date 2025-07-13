@@ -52,7 +52,7 @@ module V4crVideoUtils
   end
 
   # Get detailed information about a specific video device using V4cr
-  private def self.detect_device_info(device_path : String) : V4crVideoDevice?
+  def self.detect_device_info(device_path : String) : V4crVideoDevice?
     device = V4cr::Device.new(device_path)
     device.open
 

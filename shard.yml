@@ -26,3 +26,5 @@ dependencies:
     github: ralsina/baked_file_handler
   kemal-basic-auth:
     github: kemalcr/kemal-basic-auth
+  pluto:
+    github: phenopolis/pluto
