@@ -35,9 +35,8 @@ your video source to it, starting `kv` will show a message such as this:
 ```
 
 It will *refuse to start* if it cannot find a video capture device that
-supports MJPEG. If you have a device that does not support MJPEG. Support
-for devices that don't support MJPEG is possible but not urgen. If you need
-it, [file an issue.](https://github.com/ralsina/kv/issues)
+supports MJPEG. Support for devices that don't produce MJPEG is possible
+but not urgent. If you need it, [file an issue.](https://github.com/ralsina/kv/issues)
 
 Once kv is running, you can access using a web browser and you will see
 the video. It will have controls to make the video fullscreen, to take
@@ -49,7 +48,7 @@ video capture device.
 
 Additionally, there is a menu to set "JPEG Quality". You probably don't want
 to change it. To set JPEG quality to anything other than 100% `kv` needs to
-decode each frame and recode it, and the current implementation is not
+decode each frame and reencode it, and the current implementation is not
 performant.
 
 If the FPS are too low, it's better to lower the resolution instead.
