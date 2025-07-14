@@ -180,10 +180,8 @@ USAGE
     Log.info { "" }
 
     add_handler BakedFileHandler::BakedFileHandler.new(Assets)
-    ::Log.setup("kemal.*", :notice)
-    ::Log.setup("audio_streamer.*", :debug)
-    ::Log.setup("main", :info)
     ::Log.setup("*", :info)
+    ::Log.setup("kemal.*", :notice)
     Kemal.config.host_binding = bind_address
     Kemal.run(port: port)
   end
