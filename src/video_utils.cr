@@ -64,73 +64,47 @@ module V4crVideoUtils
       return nil
     end
 
-    # Get device information
     card = capability.card
     driver = capability.driver
 
-    # Get supported formats
     formats = [] of String
     resolutions = [] of String
     max_fps = 0
     supports_mjpeg = false
 
-    # Try to enumerate formats (this might not work on all devices)
     begin
-      # Try some common MJPEG resolutions to see what works
-      test_resolutions = [
-        {320_u32, 240_u32},
-        {640_u32, 480_u32},
-        {800_u32, 600_u32},
-        {1024_u32, 768_u32},
-        {1280_u32, 720_u32},
-        {1920_u32, 1080_u32},
-      ]
-
-      test_resolutions.each do |width, height|
-        begin
-          # Try to set MJPEG format
-          device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPEG)
+      device.supported_formats.each do |format|
+        # Accept both 'MJPEG' and 'MJPG' as MJPEG
+        if format.format_name.upcase.in?({"MJPEG", "MJPG"})
           supports_mjpeg = true
-          formats << "MJPEG" unless formats.includes?("MJPEG")
-          resolutions << "#{width}x#{height}" unless resolutions.includes?("#{width}x#{height}")
-
-          # Try to get frame rate (simplified - assumes 30fps for now)
-          max_fps = 30 if max_fps < 30
-        rescue
-          # This resolution/format combination doesn't work
         end
-      end
-
-      # Try other common formats if MJPEG doesn't work
-      unless supports_mjpeg
-        test_resolutions.each do |width, height|
-          begin
-            # Try YUYV format
-            device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_YUYV)
-            formats << "YUYV" unless formats.includes?("YUYV")
-            resolutions << "#{width}x#{height}" unless resolutions.includes?("#{width}x#{height}")
-            max_fps = 30 if max_fps < 30
-          rescue
-            # This format doesn't work either
+        formats << format.format_name unless formats.includes?(format.format_name)
+        # List all supported resolutions for this format, only allow WxH pattern
+        device.supported_resolutions(format.pixelformat).each do |res|
+          res_str = "#{res[:width]}x#{res[:height]}"
+          # Only add if both width and height are > 0 and string matches WxH
+          if res[:width] > 0 && res[:height] > 0 && res_str =~ /^\d+x\d+$/
+            resolutions << res_str unless resolutions.includes?(res_str)
           end
         end
       end
     rescue e
-      Log.debug { "#{device_path}: Error enumerating formats: #{e.message}" }
+      Log.debug { "#{device_path}: Error enumerating formats/resolutions: #{e.message}" }
     end
 
     device.close
 
-    # Only return devices that support at least one format
     if formats.size > 0
+      # Only keep valid WxH resolutions, filter out any non-matching entries (like 'jpeg')
+      clean_resolutions = resolutions.select { |res_str| res_str =~ /^\d+x\d+$/ }
       V4crVideoDevice.new(
         device: device_path,
         name: card,
         driver: driver,
         card: card,
         formats: formats,
-        resolutions: resolutions.uniq.sort!,
-        max_fps: max_fps,
+        resolutions: clean_resolutions.uniq.sort!,
+        max_fps: max_fps.to_i32,
         supports_mjpeg: supports_mjpeg
       )
     else

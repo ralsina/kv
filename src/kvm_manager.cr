@@ -66,19 +66,17 @@ class KVMManagerV4cr
       end
     end
 
-    # Handle resolution change (e.g., "1280x720@30")
+    # Handle resolution change (e.g., "1280x720")
     if @detected_qualities.includes?(quality)
-      if match = quality.match(/(\d+)x(\d+)@(\d+)/)
+      if match = quality.match(/(\d+)x(\d+)/)
         width = match[1].to_u32
         height = match[2].to_u32
-        fps = match[3].to_i32
-
-        if width != @width || height != @height || fps != @fps
-          Log.info { "Changing resolution to #{width}x#{height}@#{fps}" }
+        # Use the current fps
+        if width != @width || height != @height
+          Log.info { "Changing resolution to #{width}x#{height}@#{@fps}" }
           stop_video_stream
           @width = width
           @height = height
-          @fps = fps
           @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
           start_video_stream
         else
@@ -175,29 +173,28 @@ class KVMManagerV4cr
     @audio_streamer = AudioStreamer.new(@audio_device)
 
     # Detect available qualities from the video device
-    detected_quality_objects = [] of {width: UInt32, height: UInt32, fps: Int32}
+    detected_quality_objects = [] of {width: UInt32, height: UInt32}
     if device_info = V4crVideoUtils.detect_device_info(@video_device)
       device_info.resolutions.each do |res_str|
         if match = res_str.match(/(\d+)x(\d+)/)
           width = match[1].to_u32
           height = match[2].to_u32
-          detected_quality_objects << {width: width, height: height, fps: device_info.max_fps}
+          detected_quality_objects << {width: width, height: height}
         end
       end
     end
 
-    # Sort qualities: highest resolution first, then highest FPS
+    # Sort qualities: highest resolution first, then highest
     @detected_qualities = detected_quality_objects.uniq.sort_by! do |quality_obj|
-      # Sort by width (desc), then height (desc), then fps (desc)
-      [-quality_obj[:width].to_i32, -quality_obj[:height].to_i32, -quality_obj[:fps].to_i32]
+      [-quality_obj[:width].to_i32, -quality_obj[:height].to_i32]
     end.map do |quality_obj|
-      "#{quality_obj[:width]}x#{quality_obj[:height]}@#{quality_obj[:fps]}"
+      "#{quality_obj[:width]}x#{quality_obj[:height]}"
     end
 
     # If no qualities detected, fall back to a default or raise error
     if @detected_qualities.empty?
-      Log.warn { "No video qualities detected for #{@video_device}. Falling back to 640x480@30." }
-      @detected_qualities << "640x480@30"
+      Log.warn { "No video qualities detected for #{@video_device}. Falling back to 640x480." }
+      @detected_qualities << "640x480"
     end
 
     setup_hid_devices
