@@ -519,6 +519,11 @@ class KVMManagerV4cr
     }
   end
 
+  # Expose audio_streamer for endpoint use
+  def audio_streamer : AudioStreamer
+    @audio_streamer
+  end
+
   private def get_server_port
     # Get the port from Kemal config
     Kemal.config.port

@@ -12,8 +12,6 @@ get "/audio.ogg" do |env|
   env.response.headers["Connection"] = "keep-alive"
   env.response.headers["Access-Control-Allow-Origin"] = "*"
 
-  manager = GlobalKVM.manager
-  unless manager.audio_running?
-    manager.start_audio_stream(env.response)
-  end
+  # Use AudioStreamer in synchronous mode for separation of concerns
+  GlobalKVM.manager.audio_streamer.stream_to_http_response(env.response)
 end

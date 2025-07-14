@@ -210,6 +210,9 @@ module Main
 
     add_handler BakedFileHandler::BakedFileHandler.new(Assets)
     ::Log.setup("kemal.*", :notice)
+    ::Log.setup("audio_streamer.*", :debug)
+    ::Log.setup("main", :info)
+    ::Log.setup("*", :info)
     Kemal.run(port: port)
   end
 end
