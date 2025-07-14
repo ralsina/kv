@@ -209,6 +209,7 @@ module Main
     Log.info { "" }
 
     add_handler BakedFileHandler::BakedFileHandler.new(Assets)
+    ::Log.setup("kemal.*", :notice)
     Kemal.run(port: port)
   end
 end
