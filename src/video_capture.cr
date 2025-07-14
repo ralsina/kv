@@ -194,7 +194,6 @@ class V4crVideoCapture
   private def start_streaming_fiber
     @streaming_fiber = spawn do
       device = @device
-      frame_sleep = (1000 / @fps).milliseconds
       loop do
         select
         when @stop_channel.receive?
@@ -228,7 +227,7 @@ class V4crVideoCapture
             @last_fps_time = now
           end
 
-          sleep frame_sleep
+          Fiber.yield
         rescue ex : V4cr::Error
           Log.error(exception: ex) { "V4L2 error in streaming fiber" }
           sleep 1.second
