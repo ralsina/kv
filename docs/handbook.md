@@ -53,6 +53,9 @@ performant.
 
 If the FPS are too low, it's better to lower the resolution instead.
 
+Talking about FPS: the `-f` option is a MAXIMUM FPS, not a target. Usually
+`kv` will send them slower than that.
+
 ## Remote Mouse/Keyboard
 
 If your KVM hardware is a SBC that supports OTG on one of its USB ports,

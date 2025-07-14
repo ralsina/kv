@@ -1,6 +1,6 @@
 require "log"
 require "kemal"
-require "option_parser"
+require "docopt"
 require "./kvm_manager"
 require "./endpoints"
 require "./video_utils"
@@ -9,7 +9,8 @@ require "baked_file_handler"
 require "kemal-basic-auth"
 
 module Main
-  Log = ::Log.for("main")
+  VERSION = {{ `shards version #{__DIR__}/../`.chomp.stringify }}
+  Log     = ::Log.for("main")
 
   class Assets
     extend BakedFileSystem
@@ -35,24 +36,29 @@ module Main
   end
 
   def self.main
-    # Check for help flag before any side effects
-    if ARGV.includes?("-h") || ARGV.includes?("--help")
-      parser = OptionParser.new
-      parser.banner = "Usage: kv [options]"
-      parser.on("-d DEVICE", "--device=DEVICE", "Video device (default: auto-detect)") { }
-      parser.on("-r RESOLUTION", "--resolution=RESOLUTION", "Video resolution WIDTHxHEIGHT (default: 1920x1080)") { }
-      parser.on("-f FPS", "--fps=FPS", "Video framerate (default: 30)") { }
-      parser.on("-p PORT", "--port=PORT", "HTTP server port (default: 3000)") { }
-      parser.on("-h", "--help", "Show this help") { }
-      Log.info { parser.to_s }
-      Log.info { "" }
-      Log.info { "Examples:" }
-      Log.info { "  sudo ./bin/kv                           # Auto-detect video device, 1080p@30fps" }
-      Log.info { "  sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps" }
-      Log.info { "  sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution" }
-      Log.info { "  sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080" }
-      exit 0
-    end
+    usage = <<-USAGE
+Ultra Low-Latency KVM Server (V4cr)
+
+Usage:
+  kv [options]
+
+Options:
+  -d DEVICE, --device=DEVICE         Video device [default: auto-detect]
+  -a DEVICE, --audio-device=DEVICE   Audio device [default: hw:1,0]
+  -r RESOLUTION, --resolution=RESOLUTION  Video resolution WIDTHxHEIGHT [default: 1920x1080]
+  -f FPS, --fps=FPS                  Video framerate [default: 30]
+  -p PORT, --port=PORT               HTTP server port [default: 3000]
+  -b ADDRESS, --bind=ADDRESS         Address to bind to [default: 0.0.0.0]
+  -h, --help                         Show this help
+
+Examples:
+  sudo ./bin/kv                          # Auto-detect video device, 1080p@30fps
+  sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps
+  sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution
+  sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080
+USAGE
+
+    args = Docopt.docopt(usage, ARGV, version: VERSION)
 
     ensure_libcomposite_loaded
     KVMManagerV4cr.perform_system_cleanup
@@ -70,88 +76,53 @@ module Main
       Log.info { "🔓 Basic authentication is disabled (KV_USER and KV_PASSWORD not set)" }
     end
 
-    # Global KVM manager with configurable parameters
-    video_device = ""       # Will be auto-detected if not specified
-    audio_device = "hw:1,0" # Default audio device
+    # Extract options from docopt result
+    video_device = args["--device"]?.try(&.as(String)) || ""
+    audio_device = args["--audio-device"]?.try(&.as(String)) || "hw:1,0"
+    resolution = args["--resolution"]?.try(&.as(String)) || "1920x1080"
+    fps = args["--fps"]?.try(&.as(String)) || "30"
+    port = args["--port"]?.try(&.as(String)) || "3000"
+    bind_address = args["--bind"]?.try(&.as(String)) || "0.0.0.0"
+    auto_detect = video_device.empty? || video_device == "auto-detect"
+
+    # Parse resolution
     width = 1920_u32
     height = 1080_u32
-    fps = 30
-    port = 3000
-    auto_detect = true
-
-    # Parse command line arguments
-    OptionParser.parse do |parser|
-      parser.banner = "Usage: kv [options]"
-
-      parser.on("-d DEVICE", "--device=DEVICE", "Video device (default: auto-detect)") do |device|
-        video_device = device
-        auto_detect = false
-      end
-
-      parser.on("-a DEVICE", "--audio-device=DEVICE", "Audio device (default: hw:1,0)") do |device|
-        audio_device = device
-      end
-
-      parser.on("-r RESOLUTION", "--resolution=RESOLUTION", "Video resolution WIDTHxHEIGHT (default: 1920x1080)") do |resolution|
-        # Handle common resolution shortcuts
-        case resolution.downcase
-        when "4k", "uhd"
-          width, height = 3840_u32, 2160_u32
-        when "1440p", "qhd"
-          width, height = 2560_u32, 1440_u32
-        when "1080p", "fhd"
-          width, height = 1920_u32, 1080_u32
-        when "720p", "hd"
-          width, height = 1280_u32, 720_u32
-        when "480p"
-          width, height = 854_u32, 480_u32
-        when "360p"
-          width, height = 640_u32, 360_u32
-        else
-          if resolution =~ /^(\d+)x(\d+)$/
-            width = $1.to_u32
-            height = $2.to_u32
-          else
-            Log.error { "Invalid resolution format. Use WIDTHxHEIGHT (e.g., 1920x1080) or shortcuts:" }
-            Log.error { "  4k/uhd (3840x2160), 1440p/qhd (2560x1440), 1080p/fhd (1920x1080)" }
-            Log.error { "  720p/hd (1280x720), 480p (854x480), 360p (640x360)" }
-            exit 1
-          end
-        end
-      end
-
-      parser.on("-f FPS", "--fps=FPS", "Video framerate (default: 30)") do |framerate|
-        fps = framerate.to_i
-        if fps <= 0 || fps > 60
-          Log.error { "Invalid framerate. Must be between 1 and 60" }
-          exit 1
-        end
-      end
-
-      parser.on("-p PORT", "--port=PORT", "HTTP server port (default: 3000)") do |server_port|
-        port = server_port.to_i
-        if port <= 0 || port > 65535
-          Log.error { "Invalid port. Must be between 1 and 65535" }
-          exit 1
-        end
-      end
-
-      parser.on("-h", "--help", "Show this help") do
-        Log.info { parser.to_s }
-        Log.info { "" }
-        Log.info { "Examples:" }
-        Log.info { "  sudo ./bin/kv                           # Auto-detect video device, 1080p@30fps" }
-        Log.info { "  sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps" }
-        Log.info { "  sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution" }
-        Log.info { "  sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080" }
-        exit 0
-      end
-
-      parser.invalid_option do |flag|
-        Log.error { "ERROR: #{flag} is not a valid option." }
-        Log.error { parser.to_s }
+    case resolution.downcase
+    when "4k", "uhd"
+      width, height = 3840_u32, 2160_u32
+    when "1440p", "qhd"
+      width, height = 2560_u32, 1440_u32
+    when "1080p", "fhd"
+      width, height = 1920_u32, 1080_u32
+    when "720p", "hd"
+      width, height = 1280_u32, 720_u32
+    when "480p"
+      width, height = 854_u32, 480_u32
+    when "360p"
+      width, height = 640_u32, 360_u32
+    else
+      if match = resolution.match(/^(\d+)x(\d+)$/)
+        width = match[1].to_u32
+        height = match[2].to_u32
+      else
+        Log.error { "Invalid resolution format. Use WIDTHxHEIGHT (e.g., 1920x1080) or shortcuts:" }
+        Log.error { "  4k/uhd (3840x2160), 1440p/qhd (2560x1440), 1080p/fhd (1920x1080)" }
+        Log.error { "  720p/hd (1280x720), 480p (854x480), 360p (640x360)" }
         exit 1
       end
+    end
+
+    # Parse fps and port
+    fps = fps.to_i
+    if fps <= 0 || fps > 60
+      Log.error { "Invalid framerate. Must be between 1 and 60" }
+      exit 1
+    end
+    port = port.to_i
+    if port <= 0 || port > 65535
+      Log.error { "Invalid port. Must be between 1 and 65535" }
+      exit 1
     end
 
     # Auto-detect or validate video device
@@ -213,6 +184,7 @@ module Main
     ::Log.setup("audio_streamer.*", :debug)
     ::Log.setup("main", :info)
     ::Log.setup("*", :info)
+    Kemal.config.host_binding = bind_address
     Kemal.run(port: port)
   end
 end
