@@ -50,6 +50,45 @@ function apiFetch (endpoint, options = {}, onSuccess, onError) {
       console.error('API fetch error:', error)
     })
 }
+// --- MJPEG Stream Auto-Reconnect Logic ---
+// This logic will automatically attempt to reconnect the MJPEG stream if the backend restarts or the stream is interrupted.
+function setupMjpegAutoReconnect (imgElementId, streamUrl, retryDelayMs = 2000) {
+  const img = document.getElementById(imgElementId)
+  if (!img) return
+
+  let lastErrorTime = 0
+  let reconnecting = false
+
+  function tryReconnect () {
+    if (reconnecting) return
+    reconnecting = true
+    // Remove the old image to force browser to drop the connection
+    img.src = ''
+    setTimeout(() => {
+      // Add a cache-busting query param to avoid browser caching
+      img.src = streamUrl + '?_=' + Date.now()
+      reconnecting = false
+    }, retryDelayMs)
+  }
+
+  img.addEventListener('error', function onError () {
+    // Only reconnect if enough time has passed since last error
+    const now = Date.now()
+    if (now - lastErrorTime > retryDelayMs) {
+      lastErrorTime = now
+      tryReconnect()
+    }
+  })
+
+  // Also reconnect if the stream ends (some browsers fire 'load' on broken MJPEG)
+  img.addEventListener('load', function onLoad () {
+    // If the image loaded is very small or blank, try to reconnect
+    if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+      tryReconnect()
+    }
+  })
+}
+
 // Initialization on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
   // Upload input handler
@@ -60,6 +99,14 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadUsbImage()
       }
     })
+  }
+
+  // --- Setup MJPEG auto-reconnect for video stream ---
+  const mjpegImg = document.getElementById('video-stream')
+  if (mjpegImg) {
+    // Use the current src as the stream URL (strip any cache-busting param)
+    const baseSrc = mjpegImg.src.replace(/([?&]_=[0-9]+)/, '').replace(/([?&])$/, '')
+    setupMjpegAutoReconnect('video-stream', baseSrc)
   }
 
   // Ensure sidebar summary elements are focusable for accessibility
@@ -216,7 +263,6 @@ function hideVideoQualityMenu () {
 }
 
 function updateVideoQualityMenu (qualities, selected, jpegQuality) {
-  console.log('JPEG Quality received in updateVideoQualityMenu:', jpegQuality)
   const list = document.getElementById('video-quality-list')
   if (!list) return
   list.innerHTML = ''
@@ -416,7 +462,6 @@ window.updateStatus = function () {
       return response.json().catch(() => ({}))
     })
     .then(data => {
-      console.log('API Status Data:', data) // Add this line
       // ECM/Ethernet sidebar indicator and controls
       const eth = data.ecm || data.ethernet
       const ethStatus = document.getElementById('ethernet-status-label')
