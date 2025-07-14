@@ -73,7 +73,14 @@ class AudioStreamer
           @clients_mutex.synchronize do
             @clients.each do |client|
               begin
-                client.send({opus_data.dup, granulepos})
+                # Non-blocking send: skip if channel is full
+                select
+                when client.send({opus_data.dup, granulepos})
+                  # sent immediately
+                else
+                  # channel full, skip this client for this packet
+                  Log.debug { "[AUDIO] Skipping audio packet for slow client" }
+                end
               rescue ex
                 Log.warn { "[AUDIO] Failed to send audio packet to client: #{ex.message}" }
               end

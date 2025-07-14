@@ -5,6 +5,18 @@ require "pluto/format/jpeg"
 
 # V4cr-based video capture module to replace FFmpeg
 class V4crVideoCapture
+  getter target_fps
+  # Throttle state for video FPS limiting
+  @last_sent_time : Time::Span = Time.monotonic
+  @target_fps : Int32 = 30
+  @min_frame_interval : Time::Span = (1.0 / 30).seconds
+
+  # Allow changing FPS throttle at runtime
+  def target_fps=(fps : Int32)
+    @target_fps = fps
+    @min_frame_interval = (1.0 / fps).seconds
+  end
+
   Log = ::Log.for(self)
 
   @device : V4cr::Device
@@ -23,8 +35,9 @@ class V4crVideoCapture
   @clients_mutex = Mutex.new
   @clients = [] of Channel(Bytes)
 
-  def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32, @fps : Int32 = 30)
+  def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32, @fps : Int32 = 30, target_fps : Int32 = 30)
     @device = V4cr::Device.new(@device_path)
+    self.target_fps = target_fps
   end
 
   # Initialize and configure the V4L2 device
@@ -186,7 +199,18 @@ class V4crVideoCapture
       # if we were passing a mutable buffer. Slices are structs, but the underlying
       # pointer could be an issue if not duped.
       @clients.each do |client|
-        client.send(reencoded_data.dup)
+        begin
+          # Non-blocking send: skip if channel is full
+          select
+          when client.send(reencoded_data.dup)
+            # sent immediately
+          else
+            # channel full, skip this client for this frame
+            Log.debug { "[VIDEO] Skipping video frame for slow client" }
+          end
+        rescue ex
+          Log.warn { "[VIDEO] Failed to send video frame to client: #{ex.message}" }
+        end
       end
     end
   end
@@ -208,16 +232,22 @@ class V4crVideoCapture
           size = data.size
           valid_jpeg = size > 1000 && data[0] == 0xFF && data[1] == 0xD8 && data[size - 2] == 0xFF && data[size - 1] == 0xD9
 
+          now = Time.monotonic
           if valid_jpeg
-            broadcast_frame(data)
-            @frame_count += 1
+            # Throttle: only send if enough time has passed since last sent
+            if now - @last_sent_time >= @min_frame_interval
+              @last_sent_time = now
+              broadcast_frame(data)
+              @frame_count += 1
+            else
+              Log.debug { "[VIDEO] Frame dropped due to FPS throttle" }
+            end
           else
             Log.debug { "Skipping invalid JPEG frame (size: #{size})" }
           end
 
           device.queue_buffer(buffer)
 
-          now = Time.monotonic
           if (now - @last_fps_time) >= 1.second
             elapsed_seconds = (now - @last_fps_time).total_seconds
             if elapsed_seconds > 0

@@ -76,7 +76,9 @@ class KVMManagerV4cr
           stop_video_stream
           @width = width
           @height = height
-          @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
+          # Preserve the current target_fps if available, else use @fps
+          target_fps = @video_capture.try &.target_fps || @fps
+          @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, target_fps)
           start_video_stream
         else
           Log.info { "Resolution is already set to #{quality}, no change needed." }
@@ -165,10 +167,10 @@ class KVMManagerV4cr
   @detected_qualities : Array(String)
   @audio_streamer : AudioStreamer
 
-  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, ecm_enabled = false)
+  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, target_fps = 30, ecm_enabled = false)
     @ecm_enabled = ecm_enabled
     @mass_storage = MassStorageManager.new
-    @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps)
+    @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, target_fps)
     @audio_streamer = AudioStreamer.new(@audio_device)
 
     # Detect available qualities from the video device

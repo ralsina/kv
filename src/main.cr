@@ -175,7 +175,7 @@ module Main
     end
 
     # Create and set the global KVM manager instance
-    kvm_manager = KVMManagerV4cr.new(video_device, audio_device, width, height, fps)
+    kvm_manager = KVMManagerV4cr.new(video_device, audio_device, width, height, fps, fps)
     GlobalKVM.manager = kvm_manager
 
     # Cleanup on exit
