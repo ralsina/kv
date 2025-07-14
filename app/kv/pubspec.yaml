@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   video_player: ^2.8.2
   flutter_mjpeg: ^2.0.4
+  http: ^0.13.6
 
 dev_dependencies:
   flutter_test:

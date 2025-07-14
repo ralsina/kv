@@ -3,6 +3,8 @@ import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -108,10 +110,9 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       // Optionally handle incoming messages here
     } catch (e) {
       // Optionally handle connection errors
-      // print('WebSocket connection error: $e');
+      // debugPrint('WebSocket connection error: $e');
     }
   }
-  String _lastKey = '';
   final FocusNode _focusNode = FocusNode();
   final TextEditingController _controller = TextEditingController();
 
@@ -166,7 +167,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                           onChanged: (value) {
                             if (value.isNotEmpty) {
                               setState(() {
-                                _lastKey = value.characters.last;
+                                // _lastKey = value.characters.last; // Removed as _lastKey is no longer used
                               });
                               _controller.clear();
                             }
@@ -265,7 +266,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                               if (HardwareKeyboard.instance.isControlPressed && HardwareKeyboard.instance.isAltPressed && HardwareKeyboard.instance.isShiftPressed) {
                                 _releaseMouse();
                                 setState(() {
-                                  _lastKey = 'Ctrl+Alt+Shift (Released Mouse)';
+                                  // _lastKey = 'Ctrl+Alt+Shift (Released Mouse)'; // Removed as _lastKey is no longer used
                                 });
                                 return; // Do not process as a regular key event
                               }
@@ -282,7 +283,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                                 key = 'backspace';
                               }
                               setState(() {
-                                _lastKey = [...modifiers, key].join('+');
+                                // _lastKey = [...modifiers, key].join('+'); // Removed as _lastKey is no longer used
                               });
                               // Send to websocket
                               if (_ws != null && _ws!.readyState == WebSocket.open) {
@@ -302,11 +303,71 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                   ),
                 ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text('Last key: $_lastKey', style: const TextStyle(fontSize: 18)),
-        ),
+        const StatusBarWidget(),
       ],
+    );
+  }
+}
+
+class StatusBarWidget extends StatefulWidget {
+  const StatusBarWidget({super.key});
+
+  @override
+  State<StatusBarWidget> createState() => _StatusBarWidgetState();
+}
+
+class _StatusBarWidgetState extends State<StatusBarWidget> {
+  Map<String, dynamic> _statusData = {};
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStatus();
+    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _fetchStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchStatus() async {
+    try {
+      final response = await http.get(Uri.parse('http://rocky2:3000/api/status'));
+      if (response.statusCode == 200) {
+        setState(() {
+          _statusData = jsonDecode(response.body);
+        });
+      } else {
+        debugPrint('Failed to load status: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error fetching status: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final video = _statusData['video'] ?? {};
+    final keyboard = _statusData['keyboard'] ?? {};
+    final mouse = _statusData['mouse'] ?? {};
+    final ecm = _statusData['ecm'] ?? {};
+
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Video: ${video['resolution'] ?? 'N/A'} @ ${video['actual_fps']?.toStringAsFixed(2) ?? 'N/A'} fps (${video['fps'] ?? 'N/A'} target)'),
+          Text('Keyboard: ${keyboard['enabled'] == true ? 'Enabled' : 'Disabled'}'),
+          Text('Mouse: ${mouse['enabled'] == true ? 'Enabled' : 'Disabled'}'),
+          Text('ECM: ${ecm['up'] == true ? 'Up' : 'Down'}'),
+        ],
+      ),
     );
   }
 }
