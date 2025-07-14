@@ -394,7 +394,7 @@ window.toggleAudio = function () {
       document.body.removeChild(audioStream)
     } catch (e) {}
     audioStream = null
-    icon.textContent = 'volume_up'
+    icon.textContent = 'volume_off'
     audioBtn.title = 'Start Audio'
     audioBtn.classList.remove('active')
   } else {
@@ -404,7 +404,7 @@ window.toggleAudio = function () {
     audioStream.style.display = 'none'
 
     audioStream.addEventListener('play', () => {
-      icon.textContent = 'volume_off'
+      icon.textContent = 'volume_up'
       audioBtn.title = 'Stop Audio'
       audioBtn.classList.add('active')
       manageAudioLatency(audioStream)
@@ -422,7 +422,7 @@ window.toggleAudio = function () {
         } catch (err) {}
         audioStream = null
       }
-      icon.textContent = 'volume_up'
+      icon.textContent = 'volume_off'
       audioBtn.title = 'Start Audio'
       audioBtn.classList.remove('active')
     })
