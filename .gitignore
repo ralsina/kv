@@ -3,3 +3,7 @@
 /.shards/
 *.dwarf
 disk-images/
+.crystal/
+alsa-lib/
+opus/
+ogg/
