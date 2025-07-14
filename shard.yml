@@ -28,5 +28,3 @@ dependencies:
     github: kemalcr/kemal-basic-auth
   pluto:
     github: phenopolis/pluto
-  turbojpeg:
-    github: zuf/turbojpeg.cr
