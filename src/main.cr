@@ -183,6 +183,7 @@ USAGE
     ::Log.setup("*", :info)
     ::Log.setup("kemal.*", :notice)
     Kemal.config.host_binding = bind_address
+    ARGV.clear
     Kemal.run(port: port)
   end
 end
