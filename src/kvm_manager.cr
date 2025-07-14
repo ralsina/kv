@@ -34,7 +34,7 @@ class KVMManagerV4cr
   end
 
   def selected_quality : String
-    "#{@width}x#{@height}@#{@fps}"
+    "#{@width}x#{@height}"
   end
 
   # Change video quality (resolution@fps string)

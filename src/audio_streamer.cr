@@ -69,7 +69,6 @@ class AudioStreamer
             break
           end
           granulepos += frames
-          Log.info { "[AUDIO] Sending opus packet (size: #{opus_data.size}) to #{@clients_mutex.synchronize { @clients.size }} clients" }
           @clients_mutex.synchronize do
             @clients.each do |client|
               begin
