@@ -11,8 +11,8 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <aside id="sidebar" class="sidebar collapsed">
-        <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Controls">‹</button>
+    <aside id="sidebar" class="sidebar collapsed" role="complementary" aria-label="Controls">
+        <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Controls" aria-label="Toggle sidebar" type="button">‹</button>
         <div class="sidebar-content">
             <h2><span class="material-icons">tune</span> Controls</h2>
             <details id="section-text" open><summary><span class="material-icons">text_fields</span> Text Input</summary>
@@ -108,7 +108,7 @@
         </div>
     </aside>
 
-    <main id="main-container" class="container-fluid">
+    <main id="main-container" class="container-fluid" role="main">
         <!-- Header -->
         <header>
             <h1><span class="material-icons">desktop_windows</span> Remote KVM</h1>
@@ -132,12 +132,12 @@
             </div>
             <div class="video-container">
                 <img id="video-stream" class="video-stream" 
-                     alt="KVM Video Stream"
+                     alt="Live KVM Video Stream"
                      tabindex="0"
                      title="Click to capture mouse and keyboard input"
-                     onload="this.style.display='block'; document.getElementById('no-video').style.display='none';"
-                     onerror="this.style.display='none'; document.getElementById('no-video').style.display='block';"
-                     crossorigin="anonymous">
+                     onload="if(document.getElementById('no-video')){this.style.display='block';document.getElementById('no-video').style.display='none';}"
+                     onerror="if(document.getElementById('no-video')){this.style.display='none';document.getElementById('no-video').style.display='block';}"
+                     crossorigin="anonymous" role="img" aria-live="polite">
                 <div class="video-controls">
                     <button id="audio-btn" class="video-control-btn" onclick="toggleAudio()" title="Toggle Audio">
                         <span class="material-icons">volume_up</span>
@@ -156,7 +156,7 @@
                     </div>
                 </div>
             </div>
-            <div id="no-video" class="no-video">
+            <div id="no-video" class="no-video" role="status">
                 <span class="material-icons">videocam_off</span> Video starting up...
             </div>
         </section>
@@ -170,6 +170,6 @@
     </main>
 
     <link rel="stylesheet" href="/video_quality_menu.css">
-    <script src="/script.js"></script>
+    <script src="/script.js" defer></script>
 </body>
 </html>
