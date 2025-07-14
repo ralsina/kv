@@ -18,6 +18,9 @@ You can see a short demo video [here](https://youtu.be/_NCVytMPW18?si=67kIt7nWbr
 * Use ttyd to access the kvm itself
 * ✅ Performance improvements
 * ✅ Better UX for mass storage
+* SSL support
+* Video/Audio demuxing
+* Other pixel formats support
 
 ## Installation
 
