@@ -7,6 +7,7 @@ require "./video_utils"
 require "baked_file_system"
 require "baked_file_handler"
 require "kemal-basic-auth"
+require "./anti_idle"
 
 module Main
   VERSION = {{ `shards version #{__DIR__}/../`.chomp.stringify }}
@@ -49,6 +50,7 @@ Options:
   -f FPS, --fps=FPS                  Video framerate [default: 30]
   -p PORT, --port=PORT               HTTP server port [default: 3000]
   -b ADDRESS, --bind=ADDRESS         Address to bind to [default: 0.0.0.0]
+  --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
   -h, --help                         Show this help
 
 Examples:
@@ -149,8 +151,18 @@ USAGE
     kvm_manager = KVMManagerV4cr.new(video_device, audio_device, width, height, fps, fps)
     GlobalKVM.manager = kvm_manager
 
+    # Configure and start AntiIdle service
+    anti_idle_enabled = args["--anti-idle"].as(Bool) || false
+    if anti_idle_enabled
+      interval = 1
+      AntiIdle.configure(enabled: true, interval: interval.seconds)
+      AntiIdle.start(kvm_manager)
+      Log.info { "Anti-idle mouse jiggler is enabled with a #{interval} second interval." }
+    end
+
     # Cleanup on exit
     at_exit do
+      AntiIdle.stop if anti_idle_enabled
       kvm_manager.cleanup
     end
 

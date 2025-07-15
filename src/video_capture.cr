@@ -140,6 +140,10 @@ class V4crVideoCapture
     channel.close rescue nil
   end
 
+  def client_count : Int32
+    @clients_mutex.synchronize { @clients.size }
+  end
+
   def stream_to_http_response(response)
     channel = Channel(Bytes).new(5) # Buffer 5 frames
     add_client(channel)

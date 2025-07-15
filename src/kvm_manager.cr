@@ -526,6 +526,10 @@ class KVMManagerV4cr
     @audio_streamer
   end
 
+  def video_capture : V4crVideoCapture
+    @video_capture
+  end
+
   private def get_server_port
     # Get the port from Kemal config
     Kemal.config.port

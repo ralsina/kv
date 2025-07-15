@@ -31,6 +31,10 @@ class AudioStreamer
     channel.close rescue nil
   end
 
+  def client_count : Int32
+    @clients_mutex.synchronize { @clients.size }
+  end
+
   # Start the background audio streaming fiber (publisher)
   def start_streaming
     return if @running

@@ -65,6 +65,14 @@ When you click on the video, it will capture your pointer and keyboard and
 send them to the KVM. The KVM will then send them to the USB port of the
 server, which will treat them like normal mouse and keyboard input.
 
+### Mouse Jiggler
+
+For systems where you want to prevent the server from going idle, `kv` has
+a "mouse jiggler" feature. This is not enabled by default, and it will move
+the mouse pointer every 60 seconds by default.
+
+To enable, launch `kv` with the `--anti-idle` option.
+
 ## Mass Storage
 
 You can upload disk images to the KVM, and they can then in turn be exposed
