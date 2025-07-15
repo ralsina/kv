@@ -1,0 +1,20 @@
+[Unit]
+Description=KV: Remote KVM
+After=network.target
+
+[Service]
+Type=simple
+
+# --- Authentication Configuration ---
+# Set these environment variables to enable Basic Authentication.
+Environment="KV_USER=your_username"
+Environment="KV_PASSWORD=your_strong_password"
+
+# Replace with the path to a writable directory
+WorkingDirectory=/opt/kv
+# Replace with the actual path and options to the Grafito binary
+ExecStart=/usr/local/bin/kv -b 0.0.0.0 -p 3000 -r 720p
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,127 +1,432 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KV - Modern Remote KVM</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
     <style>
-        :root {
-            --pico-font-family: "Oxanium", sans-serif;
-        }
-        body {
-            padding-bottom: 5rem;
-        }
-        .hero {
-            text-align: center;
-            padding: 4rem 0;
-        }
-        .hero h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        .hero p {
-            font-size: 1.25rem;
-            color: var(--pico-secondary);
-        }
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-top: 4rem;
-        }
-        .feature {
-            text-align: center;
-        }
-        .feature h3 {
-            margin-bottom: 1rem;
-        }
-        .footer {
-            text-align: center;
-            padding: 2rem 0;
-            margin-top: 4rem;
-            border-top: 1px solid var(--pico-muted-border-color);
-        }
+      :root {
+        --pico-font-family: "Oxanium", sans-serif;
+      }
+      body {
+        padding-bottom: 5rem;
+      }
+      .hero {
+        text-align: center;
+        padding: 4rem 0;
+      }
+      .hero h1 {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+      }
+      .hero p {
+        font-size: 1.25rem;
+        color: var(--pico-secondary);
+      }
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-top: 4rem;
+      }
+      .feature {
+        text-align: center;
+      }
+      .feature h3 {
+        margin-bottom: 1rem;
+      }
+      .footer {
+        text-align: center;
+        padding: 2rem 0;
+        margin-top: 4rem;
+        border-top: 1px solid var(--pico-muted-border-color);
+      }
     </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700&display=swap" rel="stylesheet">
-</head>
-<body>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
     <nav class="container-fluid">
-        <ul>
-            <li><strong>KV</strong></li>
-        </ul>
-        <ul>
-            <li><a href="#features">Features</a></li>
-            <li><a href="#diagram">Diagram</a></li>
-            <li><a href="https://github.com/ralsina/kv" class="secondary" target="_blank">GitHub</a></li>
-        </ul>
+      <ul>
+        <li><strong>KV</strong></li>
+      </ul>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#diagram">Diagram</a></li>
+        <li>
+          <a
+            href="https://github.com/ralsina/kv"
+            class="secondary"
+            target="_blank"
+            >GitHub</a
+          >
+        </li>
+      </ul>
     </nav>
     <main class="container">
-        <section class="hero">
-            <h1>KV: A modern, simple remote KVM</h1>
-            <p>Minimal dependencies, easy to set up, and designed for performance.</p>
-            <a href="https://github.com/ralsina/kv/releases" role="button" class="primary">Download Now</a>
+      <div
+        class="hero-carousel-row"
+        style="
+          display: flex;
+          flex-wrap: wrap;
+          gap: 2rem;
+          align-items: center;
+          justify-content: center;
+          margin-top: 2rem;
+        "
+      >
+        <section
+          class="hero"
+          style="flex: 1 1 320px; min-width: 280px; max-width: 480px"
+        >
+          <h1>KV: A modern, simple remote KVM</h1>
+          <p>
+            Minimal dependencies, easy to set up, and designed for performance.
+          </p>
         </section>
+        <section
+          id="screenshots"
+          style="
+            flex: 1 1 320px;
+            min-width: 280px;
+            max-width: 700px;
+            text-align: center;
+            margin: 0;
+          "
+        >
+          <div
+            id="carousel"
+            class="carousel"
+            style="position: relative; max-width: 100%; margin: 2rem auto"
+          >
+            <img
+              class="carousel-image"
+              src="2025-07-15T12:40:14-03:00.png"
+              alt="Screenshot 1"
+              style="
+                width: 100%;
+                max-height: 400px;
+                object-fit: contain;
+                display: block;
+                border-radius: 1rem;
+                box-shadow: 0 4px 24px #0002;
+              "
+            />
+            <img
+              class="carousel-image"
+              src="2025-07-15T12:40:33-03:00.png"
+              alt="Screenshot 2"
+              style="
+                width: 100%;
+                max-height: 400px;
+                object-fit: contain;
+                display: none;
+                border-radius: 1rem;
+                box-shadow: 0 4px 24px #0002;
+              "
+            />
+            <img
+              class="carousel-image"
+              src="2025-07-15T12:41:19-03:00.png"
+              alt="Screenshot 3"
+              style="
+                width: 100%;
+                max-height: 400px;
+                object-fit: contain;
+                display: none;
+                border-radius: 1rem;
+                box-shadow: 0 4px 24px #0002;
+              "
+            />
+            <div
+              style="
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                z-index: 2;
+              "
+            >
+              <button
+                id="carousel-prev"
+                aria-label="Previous"
+                style="
+                  position: absolute;
+                  left: 0.5rem;
+                  top: 50%;
+                  transform: translateY(-50%);
+                  background: #222c;
+                  color: #fff;
+                  border: none;
+                  border-radius: 50%;
+                  width: 2.5rem;
+                  height: 2.5rem;
+                  font-size: 2rem;
+                  cursor: pointer;
+                  padding: 0;
+                  line-height: 2.5rem;
+                  vertical-align: middle;
+                "
+              >
+                &#8592;
+              </button>
+            </div>
+            <div
+              style="
+                position: absolute;
+                right: 0;
+                top: 0;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                z-index: 2;
+              "
+            >
+              <button
+                id="carousel-next"
+                aria-label="Next"
+                style="
+                  position: absolute;
+                  right: 0.5rem;
+                  top: 50%;
+                  transform: translateY(-50%);
+                  background: #222c;
+                  color: #fff;
+                  border: none;
+                  border-radius: 50%;
+                  width: 2.5rem;
+                  height: 2.5rem;
+                  font-size: 2rem;
+                  cursor: pointer;
+                  padding: 0;
+                  line-height: 2.5rem;
+                  vertical-align: middle;
+                "
+              >
+                &#8594;
+              </button>
+            </div>
+            <div id="carousel-indicators" style="margin-top: 1rem">
+              <span
+                class="carousel-dot"
+                style="
+                  display: inline-block;
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 50%;
+                  background: #888;
+                  margin: 0 4px;
+                  cursor: pointer;
+                "
+              ></span>
+              <span
+                class="carousel-dot"
+                style="
+                  display: inline-block;
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 50%;
+                  background: #ccc;
+                  margin: 0 4px;
+                  cursor: pointer;
+                "
+              ></span>
+              <span
+                class="carousel-dot"
+                style="
+                  display: inline-block;
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 50%;
+                  background: #ccc;
+                  margin: 0 4px;
+                  cursor: pointer;
+                "
+              ></span>
+            </div>
+          </div>
+          <!-- Modal for large image view -->
+          <div
+            id="image-modal"
+            style="
+              display: none;
+              position: fixed;
+              z-index: 10000;
+              left: 0;
+              top: 0;
+              width: 100vw;
+              height: 100vh;
+              background: rgba(0, 0, 0, 0.85);
+              align-items: center;
+              justify-content: center;
+            "
+          >
+            <span
+              id="modal-close"
+              style="
+                position: absolute;
+                top: 2rem;
+                right: 2rem;
+                color: #fff;
+                font-size: 2.5rem;
+                cursor: pointer;
+                z-index: 10001;
+              "
+              >&times;</span
+            >
+            <img
+              id="modal-img"
+              src=""
+              alt="Large screenshot"
+              style="
+                max-width: 90vw;
+                max-height: 90vh;
+                border-radius: 1.5rem;
+                box-shadow: 0 8px 32px #000a;
+                display: block;
+                margin: auto;
+              "
+            />
+          </div>
+        </section>
+      </div>
+      <!-- Quick Install Card - Full-width above the grid -->
+      <article class="feature-card" style="margin-bottom: 2rem">
+        <!-- Added margin-bottom for spacing -->
+        <h2><span class="feature-icon emoji">🚀</span>Quick Install</h2>
+        <p>
+          Get started quickly on Linux. Use our simple install script to
+          download the correct binary, place it in
+          <code>/usr/local/bin</code>, and set up a systemd service (or follow
+          any of the possible
+          <a href="https://github.com/ralsina/kv">installation instructions</a
+          >).
+        </p>
+        <div class="code-block-wrapper">
+          <pre
+            class="code-block"
+          ><code id="install-command-text">curl -sSL https://kv.ralsina.me/install.sh | sudo bash</code></pre>
+          <button
+            class="copy-button"
+            id="copy-install-command"
+            title="Copy to clipboard"
+          >
+            <span class="emoji">📋</span>
+          </button>
+        </div>
+      </article>
+      <section id="features" class="features">
+        <div class="feature">
+          <h3>Stream Video</h3>
+          <p>Stream video from the server's HDMI output with low latency.</p>
+        </div>
+        <div class="feature">
+          <h3>Remote Control</h3>
+          <p>
+            Send keyboard and mouse events from a single-board computer (SBC) to
+            the server.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Virtual Media</h3>
+          <p>
+            Expose disk images to the server as if they were plugged in via USB
+            thumb drives.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Virtual Network</h3>
+          <p>
+            Create a virtual network interface to connect your devices
+            seamlessly.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Commodity Hardware</h3>
+          <p>
+            Works with readily available hardware, no specific SBC required
+            beyond an OTG port and a USB video capture dongle.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Easiest Setup</h3>
+          <p>One binary. Will run on any Linux system.</p>
+        </div>
+      </section>
 
-        <section id="features" class="features">
-            <div class="feature">
-                <h3>Stream Video</h3>
-                <p>Stream video from the server's HDMI output with ultra-low latency.</p>
-            </div>
-            <div class="feature">
-                <h3>Remote Control</h3>
-                <p>Send keyboard and mouse events from a single-board computer (SBC) to the server.</p>
-            </div>
-            <div class="feature">
-                <h3>Virtual Media</h3>
-                <p>Expose disk images to the server as if they were plugged in via USB thumb drives.</p>
-            </div>
-            <div class="feature">
-                <h3>Commodity Hardware</h3>
-                <p>Works with readily available hardware, no specific SBC required beyond an OTG port and a USB video capture dongle.</p>
-            </div>
-        </section>
-
-        <section id="diagram" style="text-align: center; margin-top: 4rem;">
-            <h2>System Diagram</h2>
-            <p>Understand how KV connects your devices:</p>
-            <img src="kvm.svg" alt="KV System Diagram" style="max-width: 100%; height: auto; margin-top: 2rem;">
-        </section>
+      <section id="diagram" style="text-align: center; margin-top: 4rem">
+        <h2>System Diagram</h2>
+        <p>Understand how KV connects your devices:</p>
+        <img
+          src="kvm.svg"
+          alt="KV System Diagram"
+          style="max-width: 100%; height: auto; margin-top: 2rem"
+        />
+      </section>
     </main>
-    <section id="hardware-help" style="text-align: center; margin-top: 4rem; padding: 2rem; background: var(--pico-background-color); border-radius: var(--pico-border-radius);">
-        <h2>Need Help with a Hardware Project?</h2>
-        <p>If you're looking to integrate KV into your own hardware project and need assistance, don't hesitate to reach out!</p>
-        <p>We're happy to help with guidance and support.</p>
-        <a href="https://github.com/ralsina/kv/issues" role="button" class="secondary">Ask for Help on GitHub</a>
-    </section>
-    <section id="disk-images" class="container" style="margin-top: 4rem;">
-        <h2>Disk Image Management</h2>
-        <p>Manage your virtual disk images. Select an image to mount it to the KVM, or delete unused images.</p>
-        <div id="disk-image-list" class="grid">
-            <!-- Disk images will be loaded here by JavaScript -->
-            <p>Loading disk images...</p>
-        </div>
-        <div class="grid">
-            <input type="file" id="image-upload" accept=".img,.iso,.zip,.gz,.bz2,.xz" style="display: none;">
-            <button onclick="document.getElementById('image-upload').click()">Upload New Image</button>
-        </div>
-        <div style="margin-top: 1em;">
-            <span id="usb-upload-status"></span>
-            <progress id="usb-upload-progress" value="0" max="100" style="width: 100%; display: none;"></progress>
-        </div>
-    </section>
-
-    <section id="hardware-help" style="text-align: center; margin-top: 4rem; padding: 2rem; background: var(--pico-background-color); border-radius: var(--pico-border-radius);">
-        <h2>Need Help with a Hardware Project?</h2>
-        <p>If you're looking to integrate KV into your own hardware project and need assistance, don't hesitate to reach out!</p>
-        <p>We're happy to help with guidance and support.</p>
-        <a href="https://github.com/ralsina/kv/issues" role="button" class="secondary">Ask for Help on GitHub</a>
+    <section
+      id="hardware-help"
+      style="
+        text-align: center;
+        margin-top: 4rem;
+        padding: 2rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+      "
+    >
+      <h2>Need Help with a Hardware Project?</h2>
+      <p>
+        If you're looking to integrate KV into your own hardware project and
+        need assistance, don't hesitate to reach out!
+      </p>
+      <p>We're happy to help with guidance and support.</p>
+      <a
+        href="https://github.com/ralsina/kv/issues"
+        role="button"
+        class="secondary"
+        >Ask for Help on GitHub</a
+      >
     </section>
     <footer class="footer">
-        <p>&copy; 2025 KV Project. All rights reserved.</p>
+      <p>&copy; 2025 KV Project. All rights reserved.</p>
     </footer>
     <script src="/assets/script.js"></script>
-</body>
+    <script>
+      // Simple JS carousel for screenshots
+      (function () {
+        const images = document.querySelectorAll(".carousel-image");
+        const dots = document.querySelectorAll(".carousel-dot");
+        let current = 0;
+        function show(idx) {
+          images.forEach((img, i) => {
+            img.style.display = i === idx ? "block" : "none";
+          });
+          dots.forEach((dot, i) => {
+            dot.style.background = i === idx ? "#888" : "#ccc";
+          });
+          current = idx;
+        }
+        document.getElementById("carousel-prev").onclick = function () {
+          show((current + images.length - 1) % images.length);
+        };
+        document.getElementById("carousel-next").onclick = function () {
+          show((current + 1) % images.length);
+        };
+        dots.forEach((dot, i) => {
+          dot.onclick = () => show(i);
+        });
+        show(0);
+      })();
+    </script>
+  </body>
 </html>
