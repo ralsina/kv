@@ -178,18 +178,23 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                   ],
                 )
               : MouseRegion(
-                  cursor: _pointerCaptured ? SystemMouseCursors.none : SystemMouseCursors.basic,
+                  cursor: SystemMouseCursors.none,
                   onHover: (PointerHoverEvent event) {
                     if (_pointerCaptured) {
-                      final dx = event.position.dx - (_lastPointerPosition?.dx ?? event.position.dx);
-                      final dy = event.position.dy - (_lastPointerPosition?.dy ?? event.position.dy);
-                      // Only send if there is movement
-                      if ((dx != 0 || dy != 0)) {
+                      // Find the RenderBox of the video widget to get local coordinates
+                      final renderBox = context.findRenderObject() as RenderBox?;
+                      if (renderBox != null) {
+                        final localPosition = renderBox.globalToLocal(event.position);
+                        final width = renderBox.size.width;
+                        final height = renderBox.size.height;
+                        // Normalize to 0..32767 as expected by backend
+                        int absX = ((localPosition.dx / width) * 32767).clamp(0, 32767).round();
+                        int absY = ((localPosition.dy / height) * 32767).clamp(0, 32767).round();
                         if (_ws != null && _ws!.readyState == WebSocket.open) {
                           final msg = <String, dynamic>{
-                            'type': 'mouse_move',
-                            'x': dx.round(),
-                            'y': dy.round(),
+                            'type': 'mouse_absolute',
+                            'x': absX,
+                            'y': absY,
                             'buttons': [],
                           };
                           _ws!.add(jsonEncode(msg));

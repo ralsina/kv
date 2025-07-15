@@ -156,7 +156,8 @@ class KVMManagerV4cr
   @video_device : String
   @audio_device : String
   @keyboard_device : String = ""
-  @mouse_device : String = ""
+  @mouse_device : String = ""          # Relative mouse
+  @mouse_device_absolute : String = "" # Absolute mouse
   @width : UInt32
   @height : UInt32
   @fps : Int32
@@ -202,6 +203,11 @@ class KVMManagerV4cr
     start_video_stream # Start video automatically
   end
 
+  # Returns the absolute mouse device path
+  def mouse_device_absolute
+    @mouse_device_absolute
+  end
+
   def setup_hid_devices
     storage_file = @mass_storage.selected_image
     enable_mass_storage = !!storage_file
@@ -221,11 +227,13 @@ class KVMManagerV4cr
 
     @keyboard_device = devices[:keyboard]
     @mouse_device = devices[:mouse]
+    @mouse_device_absolute = devices[:mouse_absolute]
     @keyboard_enabled = File.exists?(@keyboard_device)
     @mouse_enabled = File.exists?(@mouse_device)
 
     Log.info { "HID keyboard ready: #{@keyboard_device}" }
-    Log.info { "HID mouse ready: #{@mouse_device}" }
+    Log.info { "HID mouse (relative) ready: #{@mouse_device}" }
+    Log.info { "HID mouse (absolute) ready: #{@mouse_device_absolute}" }
 
     if enable_mass_storage
       Log.info { "USB mass storage ready: #{storage_file}" }
@@ -393,6 +401,20 @@ class KVMManagerV4cr
     end
   end
 
+  # Send absolute mouse move (for absolute pointer device)
+  def send_mouse_absolute_move(x : Int32, y : Int32, buttons : Array(String) = [] of String)
+    if @mouse_device_absolute.nil? || @mouse_device_absolute.empty?
+      return {success: false, message: "Absolute mouse not available"}
+    end
+    begin
+      HIDMouse.send_mouse_absolute_move(@mouse_device_absolute, x, y, buttons)
+      {success: true, message: "Absolute mouse move sent: #{x}, #{y} with buttons: #{buttons}"}
+    rescue ex
+      Log.error { "Failed to send absolute mouse move: #{ex.message}" }
+      {success: false, message: "Error sending absolute mouse move: #{ex.message}"}
+    end
+  end
+
   def video_device
     @video_device
   end
@@ -448,8 +470,9 @@ class KVMManagerV4cr
     }
 
     mouse_status = {
-      enabled: @mouse_enabled,
-      device:  @mouse_device,
+      enabled:         @mouse_enabled,
+      device:          @mouse_device,
+      device_absolute: @mouse_device_absolute,
     }
 
     # Use actual mass storage status from the system

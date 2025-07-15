@@ -4,6 +4,61 @@ require "file_utils"
 module HIDMouse
   Log = ::Log.for(self)
 
+  # Create an absolute mouse report (buttons + 16-bit absolute X/Y)
+  def self.create_mouse_absolute_report(buttons : Array(String) = [] of String, x : Int32 = 0, y : Int32 = 0) : Bytes
+    # 5 bytes: 1 byte buttons, 2 bytes X, 2 bytes Y (little endian)
+    report = Bytes.new(5, 0_u8)
+
+    # Apply button presses (first byte)
+    button_byte = 0_u8
+    buttons.each do |button|
+      if MOUSE_BUTTONS.has_key?(button)
+        button_byte |= MOUSE_BUTTONS[button]
+      end
+    end
+    report[0] = button_byte
+
+    # Clamp X/Y to 0..32767 (15-bit unsigned)
+    x_clamped = x.clamp(0, 32767)
+    y_clamped = y.clamp(0, 32767)
+
+    # Write as little endian
+    report[1] = (x_clamped & 0xFF).to_u8
+    report[2] = ((x_clamped >> 8) & 0xFF).to_u8
+    report[3] = (y_clamped & 0xFF).to_u8
+    report[4] = ((y_clamped >> 8) & 0xFF).to_u8
+
+    report
+  end
+
+  def self.send_mouse_absolute_report(device_path : String, report : Bytes)
+    # No rate limiting for absolute, but could be added if needed
+    fd = LibC.open(device_path, LibC::O_RDWR | LibC::O_NONBLOCK, 0o666)
+    if fd < 0
+      raise "Failed to open HID absolute mouse device #{device_path}"
+    end
+    begin
+      Log.debug { "Writing absolute mouse report: #{report.map { |byte| "%02x" % byte }.join(" ")}" }
+      bytes_written = LibC.write(fd, report, report.size)
+      if bytes_written < 0
+        errno_val = Errno.value
+        Log.error { "Absolute mouse report write failed with errno: #{errno_val}" }
+        return
+      elsif bytes_written != report.size
+        Log.error { "Absolute mouse report write incomplete: #{bytes_written}/#{report.size} bytes" }
+        return
+      end
+      Log.debug { "Absolute mouse HID write completed successfully" }
+    ensure
+      LibC.close(fd)
+    end
+  end
+
+  def self.send_mouse_absolute_move(device_path : String, x : Int32, y : Int32, buttons : Array(String) = [] of String)
+    report = create_mouse_absolute_report(buttons, x, y)
+    send_mouse_absolute_report(device_path, report)
+  end
+
   # Rate limiting for mouse reports to prevent host overflow
   @@last_report_time = Time.utc
   @@min_report_interval = 8.milliseconds # 125Hz max rate - optimized for low latency

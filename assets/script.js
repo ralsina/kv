@@ -758,7 +758,9 @@ window.setupVideoCapture = function () {
   })
   video.addEventListener('click', (e) => { e.preventDefault(); video.requestPointerLock() })
   video.addEventListener('mousemove', (e) => {
-    if (pointerLocked) sendSingleMouseMove(e.movementX, e.movementY)
+    if (pointerLocked) {
+      window.sendSingleMouseMove(e.movementX, e.movementY)
+    }
   })
   video.addEventListener('mousedown', (e) => {
     if (!videoFocused) return

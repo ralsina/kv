@@ -116,6 +116,13 @@ ws "/ws/input" do |socket|
         end
       when "ping"
         socket.send({type: "pong"}.to_json)
+      when "mouse_absolute"
+        x = data["x"]?.try(&.as_i) || 0
+        y = data["y"]?.try(&.as_i) || 0
+        buttons_json = data["buttons"]?
+        buttons = buttons_json && buttons_json.as_a? ? buttons_json.as_a.map(&.as_s) : [] of String
+        result = manager.send_mouse_absolute_move(x, y, buttons)
+        handle_result.call(result)
       else
         send_error.call("Unknown event type: #{event_type}")
       end

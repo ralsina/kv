@@ -1,3 +1,7 @@
+/* Hide cursor only when the pointer is locked */
+.video-container.pointer-locked .video-stream {
+  cursor: none !important;
+}
       html, body {
         font-family: 'Oxanium', Arial, sans-serif;
       }

@@ -152,7 +152,7 @@ USAGE
     GlobalKVM.manager = kvm_manager
 
     # Configure and start AntiIdle service
-    anti_idle_enabled = args["--anti-idle"].as(Bool) || false
+    anti_idle_enabled = args.includes? "--anti-idle"
     if anti_idle_enabled
       interval = 1
       AntiIdle.configure(enabled: true, interval: interval.seconds)
