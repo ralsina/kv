@@ -10,6 +10,8 @@ KV is a modern, simple remote KVM solution. Minimal dependencies, easy to set up
 
 You can see a short demo video [here](https://youtu.be/_NCVytMPW18?si=67kIt7nWbrda1uy8)
 
+Some more information in [the website](https://kv.ralsina.me)
+
 ## Known Bugs
 
 * Framerate detection is broken. You can use `-f` as a workaround. 
