@@ -105,6 +105,14 @@
                     <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
                 </div>
             </details>
+            <details class="dropdown">
+                <summary role="button" class="secondary">Theme</summary>
+                <ul>
+                    <li><a href="#" data-theme-switcher="auto">Auto</a></li>
+                    <li><a href="#" data-theme-switcher="light">Light</a></li>
+                    <li><a href="#" data-theme-switcher="dark">Dark</a></li>
+                </ul>
+            </details>
         </div>
     </aside>
 
@@ -113,7 +121,6 @@
         <header>
             <h1><span class="material-icons">desktop_windows</span> Remote KVM</h1>
             <div class="header-controls">
-                <!-- Restart button removed -->
             </div>
         </header>
 
@@ -171,5 +178,29 @@
 
     <link rel="stylesheet" href="/video_quality_menu.css">
     <script src="/script.js" defer></script>
+    <script>
+        const setTheme = (theme) => {
+            const html = document.querySelector("html");
+            html.dataset.theme = theme;
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const switchers = document.querySelectorAll("[data-theme-switcher]");
+
+            switchers.forEach(switcher => {
+                switcher.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const theme = event.target.dataset.themeSwitcher;
+                    setTheme(theme);
+                    localStorage.setItem("theme", theme);
+                });
+            });
+
+            const savedTheme = localStorage.getItem("theme");
+            if (savedTheme) {
+                setTheme(savedTheme);
+            }
+        });
+    </script>
 </body>
 </html>
