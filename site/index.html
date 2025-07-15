@@ -118,6 +118,7 @@
                 display: block;
                 border-radius: 1rem;
                 box-shadow: 0 4px 24px #0002;
+                cursor: pointer;
               "
             />
             <img
@@ -131,6 +132,7 @@
                 display: none;
                 border-radius: 1rem;
                 box-shadow: 0 4px 24px #0002;
+                cursor: pointer;
               "
             />
             <img
@@ -144,6 +146,7 @@
                 display: none;
                 border-radius: 1rem;
                 box-shadow: 0 4px 24px #0002;
+                cursor: pointer;
               "
             />
             <div
@@ -312,7 +315,7 @@
           <a href="https://github.com/ralsina/kv">installation instructions</a
           >).
         </p>
-        <div class="code-block-wrapper">
+        <div class="code-block-wrapper" style="position: relative;">
           <pre
             class="code-block"
           ><code id="install-command-text">curl -sSL https://kv.ralsina.me/install.sh | sudo bash</code></pre>
@@ -320,6 +323,7 @@
             class="copy-button"
             id="copy-install-command"
             title="Copy to clipboard"
+            style="position: absolute; top: 0.5rem; right: 0.5rem; background: #222c; color: #fff; border: none; border-radius: 0.25rem; cursor: pointer;"
           >
             <span class="emoji">📋</span>
           </button>
@@ -389,7 +393,6 @@
         If you're looking to integrate KV into your own hardware project and
         need assistance, don't hesitate to reach out!
       </p>
-      <p>We're happy to help with guidance and support.</p>
       <a
         href="https://github.com/ralsina/kv/issues"
         role="button"
@@ -426,6 +429,40 @@
           dot.onclick = () => show(i);
         });
         show(0);
+
+        // Modal logic
+        const modal = document.getElementById("image-modal");
+        const modalImg = document.getElementById("modal-img");
+        const closeBtn = document.getElementById("modal-close");
+
+        images.forEach(img => {
+            img.onclick = () => {
+                modal.style.display = "flex";
+                modalImg.src = img.src;
+            }
+        });
+
+        closeBtn.onclick = () => {
+            modal.style.display = "none";
+        }
+
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        // Copy to clipboard
+        const copyButton = document.getElementById("copy-install-command");
+        const commandText = document.getElementById("install-command-text").innerText;
+        copyButton.onclick = () => {
+            navigator.clipboard.writeText(commandText).then(() => {
+                copyButton.innerText = "Copied!";
+                setTimeout(() => {
+                    copyButton.innerHTML = "<span class=\"emoji\">📋</span>";
+                }, 2000);
+            });
+        }
       })();
     </script>
   </body>
