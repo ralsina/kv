@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'status_bar_widget.dart';
 import 'sidebar_widget.dart';
 
+import 'keyboard_widget.dart';
+
 class VideoPlayerWidget extends StatefulWidget {
   final String backendUrl;
   const VideoPlayerWidget({super.key, required this.backendUrl});
@@ -284,6 +286,23 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                       ),
                     ],
                   ),
+                ),
+              ),
+
+              // 65% Keyboard Widget below the video
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: KeyboardWidget(
+                  onKeyPress: (key, {modifiers = const []}) {
+                    if (_wsOpen) {
+                      final msg = <String, dynamic>{
+                        'type': modifiers.isNotEmpty ? 'key_combination' : 'key_press',
+                        'key': key,
+                        if (modifiers.isNotEmpty) 'modifiers': modifiers,
+                      };
+                      _sendWsMessage(msg);
+                    }
+                  },
                 ),
               ),
               StatusBarWidget(
