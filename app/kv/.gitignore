@@ -1,5 +1,7 @@
 # Miscellaneous
+.fvmrc
 *.class
+android/
 *.log
 *.pyc
 *.swp
