@@ -192,6 +192,10 @@ USAGE
     Log.info { "" }
 
     add_handler BakedFileHandler::BakedFileHandler.new(Assets)
+    # Enable CORS for all origins (allow cross-origin requests) on all responses
+    before_all do |env|
+      env.response.headers.add("Access-Control-Allow-Origin", "*")
+    end
     ::Log.setup("*", :info)
     ::Log.setup("kemal.*", :notice)
     Kemal.config.host_binding = bind_address
