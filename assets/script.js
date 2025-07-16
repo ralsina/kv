@@ -655,7 +655,7 @@ window.sendSingleMouseMove = function (x, y) {
 
 window.sendText = function () {
   const textInput = document.getElementById('text-input')
-  const text = textInput.value.trim()
+  const text = textInput.value
   if (!text) return
   wsSendInput({ type: 'text', text })
   textInput.value = ''

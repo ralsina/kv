@@ -224,7 +224,10 @@ module HIDKeyboard
       # Handle character using KVAL mapping
       char_str = char.to_s
 
-      if char >= 'a' && char <= 'z'
+      if char == ' '
+        # Handle space explicitly
+        report[2] = KVAL["space"]
+      elsif char >= 'a' && char <= 'z'
         # Lowercase letters
         report[2] = (char.ord - 'a'.ord + 0x04).to_u8
       elsif char >= 'A' && char <= 'Z'
