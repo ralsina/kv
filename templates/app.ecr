@@ -92,19 +92,14 @@
                 </div>
             </details>
 
-            <details id="section-ethernet"><summary><span class="material-icons">cable</span> Network (ECM)</summary>
-                <div class="compact-section">
-                    <div id="ethernet-status-indicator" style="margin-bottom:0.5rem; font-size:0.95em;">
-                        <span class="material-icons" id="ethernet-status-icon">cable</span>
-                        <span id="ethernet-status-label">Checking...</span>
-                    </div>
-                    <div style="display:flex; gap:0.5rem;">
-                        <button id="ethernet-enable-btn" class="outline" onclick="setEthernet(true)"><span class="material-icons">lan</span>Enable</button>
-                        <button id="ethernet-disable-btn" class="outline" onclick="setEthernet(false)"><span class="material-icons">lan_off</span>Disable</button>
-                    </div>
-                    <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
-                </div>
-            </details>
+            <div style="margin-bottom:1em;">
+                <label style="display:flex;align-items:center;gap:0.5em;">
+                    <span class="material-icons" id="ethernet-status-icon">cable</span>
+                    <span id="ethernet-status-label" style="min-width:4em;">Checking...</span>
+                    <input type="checkbox" id="ethernet-switch" name="ethernet-switch" role="switch" class="switch" onchange="setEthernet(this.checked)">
+                </label>
+                <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
+            </div>
             <details class="dropdown">
                 <summary role="button" class="secondary">Theme</summary>
                 <ul>

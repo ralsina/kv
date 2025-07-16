@@ -466,23 +466,25 @@ window.updateStatus = function () {
       const eth = data.ecm || data.ethernet
       const ethStatus = document.getElementById('ethernet-status-label')
       const ethIcon = document.getElementById('ethernet-status-icon')
-      const enableBtn = document.getElementById('ethernet-enable-btn')
-      const disableBtn = document.getElementById('ethernet-disable-btn')
+      const ethSwitch = document.getElementById('ethernet-switch')
       const ethIfname = document.getElementById('ethernet-ifname')
-      if (ethStatus && ethIcon && enableBtn && disableBtn) {
-        if (eth) {
+      if (ethStatus && ethIcon && ethSwitch) {
+        if (eth && eth.exists) {
           if (eth.enabled) {
             ethStatus.textContent = 'Enabled'
             ethIcon.textContent = 'lan'
             ethIcon.className = 'material-icons good'
-            enableBtn.disabled = true
-            disableBtn.disabled = false
+            ethSwitch.checked = true
           } else {
             ethStatus.textContent = 'Disabled'
             ethIcon.textContent = 'lan_off'
             ethIcon.className = 'material-icons bad'
-            enableBtn.disabled = false
-            disableBtn.disabled = true
+            ethSwitch.checked = false
+          }
+          if (eth.operstate === 'up') {
+            ethStatus.textContent = 'Up'
+          } else if (eth.operstate === 'down') {
+            ethStatus.textContent = 'Down'
           }
           if (eth.ifname) {
             ethIfname.textContent = 'Interface: ' + eth.ifname + (eth.ip ? ' (' + eth.ip + ')' : '')
@@ -493,8 +495,7 @@ window.updateStatus = function () {
           ethStatus.textContent = 'Unavailable'
           ethIcon.textContent = 'cable'
           ethIcon.className = 'material-icons'
-          enableBtn.disabled = false
-          disableBtn.disabled = false
+          ethSwitch.checked = false
           ethIfname.textContent = ''
         }
       }
