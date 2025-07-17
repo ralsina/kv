@@ -167,9 +167,22 @@ class SidebarWidgetState extends State<SidebarWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    double sidebarWidth;
+    if (widget.isOpen) {
+      if (isLandscape) {
+        sidebarWidth = screenWidth * 0.5;
+      } else {
+        sidebarWidth = screenWidth * 0.9;
+      }
+    } else {
+      sidebarWidth = 48;
+    }
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: widget.isOpen ? 250 : 48,
+      width: sidebarWidth,
       color: Colors.grey.shade200,
       child: Row(
         children: [
