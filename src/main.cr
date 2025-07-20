@@ -38,28 +38,28 @@ module Main
 
   def self.main
     usage = <<-USAGE
-Ultra Low-Latency KVM Server (V4cr)
+      Ultra Low-Latency KVM Server (V4cr)
 
-Usage:
-  kv [options]
+      Usage:
+        kv [options]
 
-Options:
-  -d DEVICE, --device=DEVICE         Video device [default: auto-detect]
-  -a DEVICE, --audio-device=DEVICE   Audio device [default: hw:1,0]
-  -r RESOLUTION, --resolution=RESOLUTION  Video resolution WIDTHxHEIGHT [default: 1920x1080]
-  -f FPS, --fps=FPS                  Video framerate [default: 30]
-  -q QUALITY, --quality=QUALITY      Video JPEG quality (1-100) [default: 100]
-  -p PORT, --port=PORT               HTTP server port [default: 3000]
-  -b ADDRESS, --bind=ADDRESS         Address to bind to [default: 0.0.0.0]
-  --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
-  -h, --help                         Show this help
+      Options:
+        -d DEVICE, --device=DEVICE         Video device [default: auto-detect]
+        -a DEVICE, --audio-device=DEVICE   Audio device [default: hw:1,0]
+        -r RESOLUTION, --resolution=RESOLUTION  Video resolution WIDTHxHEIGHT [default: 1920x1080]
+        -f FPS, --fps=FPS                  Video framerate [default: 30]
+        -q QUALITY, --quality=QUALITY      Video JPEG quality (1-100) [default: 100]
+        -p PORT, --port=PORT               HTTP server port [default: 3000]
+        -b ADDRESS, --bind=ADDRESS         Address to bind to [default: 0.0.0.0]
+        --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
+        -h, --help                         Show this help
 
-Examples:
-  sudo ./bin/kv                          # Auto-detect video device, 1080p@30fps
-  sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps
-  sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution
-  sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080
-USAGE
+      Examples:
+        sudo ./bin/kv                          # Auto-detect video device, 1080p@30fps
+        sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps
+        sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution
+        sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080
+      USAGE
 
     args = Docopt.docopt(usage, ARGV, version: VERSION)
 

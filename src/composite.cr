@@ -424,7 +424,7 @@ module HIDComposite
 
     # Only bring up the interface if requested (legacy: enable_ecm)
     if enable_ecm
-      self.enable_ecm_interface
+      enable_ecm_interface
     end
 
     {keyboard: keyboard_device, mouse: mouse_device, mouse_absolute: mouse_abs_device, ethernet: "/dev/usb0", ethernet_ifname: @@ethernet_ifname, dnsmasq_pid: nil}

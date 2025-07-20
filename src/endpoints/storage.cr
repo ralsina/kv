@@ -5,9 +5,9 @@ require "mime/multipart"
 get "/api/storage/images" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.manager
-  images = manager.@mass_storage.available_images.map { |img|
+  images = manager.@mass_storage.available_images.map do |img|
     File.basename(img)
-  }
+  end
   selected = manager.@mass_storage.selected_image
   selected = File.basename(selected) if selected
   {success: true, images: images, selected: selected}.to_json
