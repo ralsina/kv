@@ -52,7 +52,7 @@ module V4crVideoUtils
   end
 
   # Helper to process format information
-  private def self.process_format_info(device : V4cr::Device, format : V4cr::LibV4L2::Format, formats : Array(String), resolutions : Array(String), supports_mjpeg : Bool, max_fps : Int32)
+  private def self.process_format_info(device : V4cr::Device, format : V4cr::Format, formats : Array(String), resolutions : Array(String), supports_mjpeg : Bool)
     if format.format_name.upcase.in?({"MJPEG", "MJPG"})
       supports_mjpeg = true
     end
@@ -61,12 +61,9 @@ module V4crVideoUtils
       res_str = "#{res[:width]}x#{res[:height]}"
       if res[:width] > 0 && res[:height] > 0 && res_str =~ /^\d+x\d+$/
         resolutions << res_str unless resolutions.includes?(res_str)
-        if res[:max_fps] && res[:max_fps] > max_fps
-          max_fps = res[:max_fps]
-        end
       end
     end
-    {supports_mjpeg, max_fps}
+    supports_mjpeg
   end
 
   # Helper to build all device info data
@@ -90,9 +87,7 @@ module V4crVideoUtils
       max_fps = 0
 
       device.supported_formats.each do |format|
-        new_supports_mjpeg, new_max_fps = process_format_info(device, format, formats, resolutions, supports_mjpeg, max_fps)
-        supports_mjpeg = new_supports_mjpeg
-        max_fps = new_max_fps
+        supports_mjpeg = process_format_info(device, format, formats, resolutions, supports_mjpeg)
       end
       device.close
 
@@ -106,21 +101,16 @@ module V4crVideoUtils
 
   # Get detailed information about a specific video device using V4cr
   def self.detect_device_info(device_path : String) : V4crVideoDevice?
-    device_and_capability = query_device_capabilities(device_path)
-    return nil unless device_and_capability
+    data = build_device_info_data(device_path)
+    return nil unless data
 
-    device, capability = device_and_capability
-    card = capability.card
-    driver = capability.driver
-
-    formats, resolutions, supports_mjpeg, max_fps = get_supported_formats_and_resolutions(device)
-    device.close
+    path, card, driver, formats, resolutions, supports_mjpeg, max_fps = data
 
     return nil if formats.empty?
 
     clean_resolutions = resolutions.select { |res_str| res_str =~ /^\d+x\d+$/ }
     V4crVideoDevice.new(
-      device: device_path,
+      device: path,
       name: card,
       driver: driver,
       card: card,

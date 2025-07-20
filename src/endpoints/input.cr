@@ -56,6 +56,7 @@ ws "/ws/input" do |socket|
   end
 
   socket.on_message do |message|
+    Log.info { "Received WebSocket message: #{message}" }
     begin
       data = JSON.parse(message)
       event_type = data["type"]?.try(&.as_s)

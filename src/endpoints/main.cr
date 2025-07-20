@@ -2,3 +2,7 @@
 get "/" do
   render "templates/app.ecr"
 end
+
+get "/mobile" do
+  render "templates/mobile.ecr"
+end
