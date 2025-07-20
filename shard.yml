@@ -28,5 +28,6 @@ dependencies:
     github: kemalcr/kemal-basic-auth
   pluto:
     github: phenopolis/pluto
+    version: ~> 1.0.1
   docopt:
     github: ralsina/docopt.cr

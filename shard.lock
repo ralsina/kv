@@ -46,5 +46,5 @@ shards:
 
   v4cr:
     git: https://github.com/ralsina/v4cr.git
-    version: 0.1.0+git.commit.94deca76c32d6dae6a2e0d83e1cafe7628119954
+    version: 0.1.0+git.commit.bb5216f35a1593117c88aa7e9ebaf466057a9151
 

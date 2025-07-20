@@ -92,7 +92,7 @@ class AudioStreamer
           elapsed = Time.monotonic - loop_start_time
           sleep_duration = chunk_duration - elapsed
           if sleep_duration > Time::Span.zero
-            # sleep sleep_duration
+            sleep sleep_duration
             Fiber.yield
           end
         end

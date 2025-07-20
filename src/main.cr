@@ -48,6 +48,7 @@ Options:
   -a DEVICE, --audio-device=DEVICE   Audio device [default: hw:1,0]
   -r RESOLUTION, --resolution=RESOLUTION  Video resolution WIDTHxHEIGHT [default: 1920x1080]
   -f FPS, --fps=FPS                  Video framerate [default: 30]
+  -q QUALITY, --quality=QUALITY      Video JPEG quality (1-100) [default: 100]
   -p PORT, --port=PORT               HTTP server port [default: 3000]
   -b ADDRESS, --bind=ADDRESS         Address to bind to [default: 0.0.0.0]
   --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
@@ -83,6 +84,7 @@ USAGE
     audio_device = args["--audio-device"]?.try(&.as(String)) || "hw:1,0"
     resolution = args["--resolution"]?.try(&.as(String)) || "1920x1080"
     fps = args["--fps"]?.try(&.as(String)) || "30"
+    jpeg_quality = args["--quality"]?.try(&.as(String)) || "100"
     port = args["--port"]?.try(&.as(String)) || "3000"
     bind_address = args["--bind"]?.try(&.as(String)) || "0.0.0.0"
     auto_detect = video_device.empty? || video_device == "auto-detect"
@@ -115,10 +117,15 @@ USAGE
       end
     end
 
-    # Parse fps and port
+    # Parse fps, jpeg_quality and port
     fps = fps.to_i
     if fps <= 0 || fps > 60
       Log.error { "Invalid framerate. Must be between 1 and 60" }
+      exit 1
+    end
+    jpeg_quality = jpeg_quality.to_i
+    if jpeg_quality <= 0 || jpeg_quality > 100
+      Log.error { "Invalid JPEG quality. Must be between 1 and 100" }
       exit 1
     end
     port = port.to_i
@@ -148,7 +155,7 @@ USAGE
     end
 
     # Create and set the global KVM manager instance
-    kvm_manager = KVMManagerV4cr.new(video_device, audio_device, width, height, fps, fps)
+    kvm_manager = KVMManagerV4cr.new(video_device, audio_device, width, height, fps, jpeg_quality)
     GlobalKVM.manager = kvm_manager
 
     # Configure and start AntiIdle service
@@ -185,6 +192,7 @@ USAGE
     Log.info { "   Video device: #{video_device}" }
     Log.info { "   Resolution: #{width}x#{height}" }
     Log.info { "   Framerate: #{fps} fps" }
+    Log.info { "   JPEG Quality: #{jpeg_quality}" }
     Log.info { "   Server port: #{port}" }
     Log.info { "" }
     Log.info { "V4cr implementation for zero-copy video streaming" }

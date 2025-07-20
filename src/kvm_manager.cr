@@ -41,14 +41,13 @@ class KVMManagerV4cr
   def video_quality=(quality : String) : Bool
     Log.info { "Attempting to set video quality to: #{quality}" }
 
-    # Handle JPEG quality change (e.g., "jpeg:80")
     if quality.starts_with?("jpeg:")
       parts = quality.split(':')
       if parts.size == 2
         if new_quality = parts[1].to_i?
           if new_quality >= 1 && new_quality <= 100
             @video_jpeg_quality = new_quality
-            @video_capture.quality = @video_jpeg_quality
+            @video_capture.jpeg_quality = @video_jpeg_quality
             Log.info { "Successfully set video JPEG quality to #{@video_jpeg_quality}" }
             return true
           else
@@ -63,22 +62,37 @@ class KVMManagerV4cr
         Log.warn { "Invalid JPEG quality format: #{quality}" }
         return false
       end
-    end
-
-    # Handle resolution change (e.g., "1280x720")
-    if @detected_qualities.includes?(quality)
+    elsif quality.starts_with?("fps:")
+      parts = quality.split(':')
+      if parts.size == 2
+        if new_fps = parts[1].to_i?
+          if new_fps >= 1 && new_fps <= 60 # Assuming a reasonable FPS range
+            @fps = new_fps
+            @video_capture.fps = @fps
+            Log.info { "Successfully set video FPS to #{@fps}" }
+            return true
+          else
+            Log.warn { "FPS out of range: #{new_fps}" }
+            return false
+          end
+        else
+          Log.warn { "Invalid FPS value: #{parts[1]}" }
+          return false
+        end
+      else
+        Log.warn { "Invalid FPS format: #{quality}" }
+        return false
+      end
+    elsif @detected_qualities.includes?(quality)
       if match = quality.match(/(\d+)x(\d+)/)
         width = match[1].to_u32
         height = match[2].to_u32
-        # Use the current fps
         if width != @width || height != @height
-          Log.info { "Changing resolution to #{width}x#{height}@#{@fps}" }
+          Log.info { "Changing resolution to #{width}x#{height}" }
           stop_video_stream
           @width = width
           @height = height
-          # Preserve the current target_fps if available, else use @fps
-          target_fps = @video_capture.try &.target_fps || @fps
-          @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, target_fps)
+          @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
           start_video_stream
         else
           Log.info { "Resolution is already set to #{quality}, no change needed." }
@@ -168,10 +182,10 @@ class KVMManagerV4cr
   @detected_qualities : Array(String)
   @audio_streamer : AudioStreamer
 
-  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, target_fps = 30, ecm_enabled = false)
+  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, @video_jpeg_quality = 100, ecm_enabled = false)
     @ecm_enabled = ecm_enabled
     @mass_storage = MassStorageManager.new
-    @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, target_fps)
+    @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
     @audio_streamer = AudioStreamer.new(@audio_device)
 
     # Detect available qualities from the video device
@@ -448,7 +462,6 @@ class KVMManagerV4cr
                        driver:           info.try(&.[:driver]) || "unknown",
                        card:             info.try(&.[:card]) || "unknown",
                        format:           info.try(&.[:format]) || "unknown",
-                       clients:          nil, # client_count removed, always nil
                        capture_type:     "v4cr",
                        qualities:        available_qualities,
                        selected_quality: selected_quality,

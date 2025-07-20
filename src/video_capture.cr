@@ -5,25 +5,12 @@ require "pluto/format/jpeg"
 
 # V4cr-based video capture module to replace FFmpeg
 class V4crVideoCapture
-  getter target_fps
-  # Throttle state for video FPS limiting
-  @last_sent_time : Time::Span = Time.monotonic
-  @target_fps : Int32 = 30
-  @min_frame_interval : Time::Span = (1.0 / 30).seconds
-
-  # Allow changing FPS throttle at runtime
-  def target_fps=(fps : Int32)
-    @target_fps = fps
-    @min_frame_interval = (1.0 / fps).seconds
-  end
-
   Log = ::Log.for(self)
 
   @device : V4cr::Device
   @streaming_fiber : Fiber?
   @running = false
   @stop_channel = Channel(Nil).new
-  @fps : Int32
   @frame_count : Int32 = 0
   @actual_fps : Float64 = 0.0
   @last_fps_time : Time::Span = Time.monotonic
@@ -35,9 +22,38 @@ class V4crVideoCapture
   @clients_mutex = Mutex.new
   @clients = [] of Channel(Bytes)
 
-  def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32, @fps : Int32 = 30, target_fps : Int32 = 30)
+  def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32, @fps : Int32 = 30, @jpeg_quality : Int32 = 100)
     @device = V4cr::Device.new(@device_path)
-    self.target_fps = target_fps
+  end
+
+  # Allow changing FPS at runtime
+  def fps=(fps : Int32)
+    @fps = fps
+    if @device.open?
+      begin
+        @device.framerate = fps.to_u32
+        Log.info { "Set device FPS to #{fps}" }
+      rescue ex
+        Log.warn { "Failed to set device FPS to #{fps}: #{ex.message}" }
+      end
+    end
+  end
+
+  # Allow changing JPEG quality at runtime
+  def jpeg_quality=(quality : Int32)
+    @jpeg_quality = quality
+    if @device.open?
+      begin
+        @device.jpeg_quality = quality
+        Log.info { "Set device JPEG quality to #{quality}" }
+        @quality = quality # Set internal quality for re-encoding only if device setting succeeds
+      rescue ex
+        Log.warn { "Failed to set device JPEG quality to #{quality}: #{ex.message}. Assuming 100% quality and skipping re-encoding." }
+        @quality = 100 # Assume 100% quality if device setting fails, to skip re-encoding
+      end
+    else
+      @quality = quality # If device not open, still set internal quality for re-encoding
+    end
   end
 
   # Initialize and configure the V4L2 device
@@ -55,15 +71,19 @@ class V4crVideoCapture
       end
 
       begin
-        device.set_format(@width, @height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPEG)
+        device.set_format(@width, @height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPG)
         fmt = device.format
         @width = fmt.width || @width
         @height = fmt.height || @height
         Log.info { "Device #{@device_path} configured for MJPEG #{fmt.width}x#{fmt.height} (actual format: #{fmt.format_name})" }
+
+        # Set initial FPS and JPEG quality
+        self.fps = @fps
+        self.jpeg_quality = @jpeg_quality
+
         true
       rescue e
-        Log.error { "Failed to set MJPEG format: #{e.message}" }
-        # Fallback logic can be added here if needed
+        Log.error { "Failed to set MJPEG format or device parameters: #{e.message}" }
         false
       end
     rescue e
@@ -174,10 +194,6 @@ class V4crVideoCapture
     @actual_fps
   end
 
-  def quality=(new_quality : Int32)
-    @quality = new_quality
-  end
-
   private def reencode_frame(frame_data : Bytes) : Bytes
     return frame_data if @quality == 100
 
@@ -238,14 +254,8 @@ class V4crVideoCapture
 
           now = Time.monotonic
           if valid_jpeg
-            # Throttle: only send if enough time has passed since last sent
-            if now - @last_sent_time >= @min_frame_interval
-              @last_sent_time = now
-              broadcast_frame(data)
-              @frame_count += 1
-            else
-              Log.debug { "[VIDEO] Frame dropped due to FPS throttle" }
-            end
+            broadcast_frame(data)
+            @frame_count += 1
           else
             Log.debug { "Skipping invalid JPEG frame (size: #{size})" }
           end

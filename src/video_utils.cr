@@ -186,7 +186,7 @@ module V4crVideoUtils
       test_device.open
 
       # Try to set the requested format
-      test_device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPEG)
+      test_device.set_format(width, height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPG)
 
       # Try to request buffers (this will fail if device is busy)
       test_device.request_buffers(2)
