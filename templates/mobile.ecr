@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KV Mobile KVM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+    <link rel="stylesheet" href="/mobile/mobile.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        var sidebar = document.getElementById('sidebar');
+        var toggle = document.getElementById('sidebar-toggle');
+        toggle.addEventListener('click', function () {
+          sidebar.classList.toggle('collapsed');
+        });
+        // Theme switcher logic
+        document.querySelectorAll('[data-theme-switcher]').forEach(function(link) {
+          link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var theme = link.getAttribute('data-theme-switcher');
+            if (theme === 'auto') {
+              document.documentElement.removeAttribute('data-theme');
+            } else {
+              document.documentElement.setAttribute('data-theme', theme);
+            }
+          });
+        });
+        });
+    </script>
+    <aside id="sidebar" class="sidebar collapsed" role="complementary" aria-label="Controls">
+      <nav class="container">
+        <h2><span class="material-icons">tune</span> Controls</h2>
+        <details open>
+          <summary><span class="material-icons">text_fields</span> Text Input</summary>
+          <form id="text-input-form" onsubmit="event.preventDefault(); sendText();">
+            <input type="text" id="text-input" placeholder="Type text to send..." maxlength="200">
+            <button type="submit">Send</button>
+          </form>
+          <button onclick="pasteFromClipboard()"><span class="material-icons">content_paste</span> Paste Clipboard</button>
+        </details>
+        <details>
+          <summary><span class="material-icons">keyboard_alt</span> Quick Keys</summary>
+          <div>
+            <button onclick="sendKey('enter')">Enter</button>
+            <button onclick="sendKey('tab')">Tab</button>
+            <button onclick="sendKey('escape')">Esc</button>
+            <button onclick="sendKey('backspace')">⌫</button>
+            <button onclick="sendKey('delete')">Del</button>
+            <button onclick="sendKey('space')">Space</button>
+          </div>
+        </details>
+        <details>
+          <summary><span class="material-icons">shortcut</span> Shortcuts</summary>
+          <div>
+            <button onclick="sendCombination(['ctrl'], ['c'])">Ctrl+C</button>
+            <button onclick="sendCombination(['ctrl'], ['v'])">Ctrl+V</button>
+            <button onclick="sendCombination(['ctrl'], ['x'])">Ctrl+X</button>
+            <button onclick="sendCombination(['ctrl'], ['z'])">Ctrl+Z</button>
+            <button onclick="sendCombination(['ctrl'], ['a'])">Ctrl+A</button>
+            <button onclick="sendCombination(['alt'], ['tab'])">Alt+Tab</button>
+            <button onclick="pasteFromClipboard()" title="Paste from your clipboard"><span class="material-icons" style="font-size: 0.8em;">content_paste</span> Paste</button>
+          </div>
+        </details>
+        <details>
+          <summary><span class="material-icons">mouse</span> Mouse Buttons</summary>
+          <div>
+            <button onclick="sendMouseClick('left')">L Click</button>
+            <button onclick="sendMouseClick('right')">R Click</button>
+            <button onclick="sendMouseClick('middle')">M Click</button>
+          </div>
+        </details>
+        <details>
+          <summary><span class="material-icons">videocam</span> Video Controls</summary>
+          <div>
+            <p><span class="material-icons" style="font-size: 0.9em;">fullscreen</span> <strong>Fullscreen:</strong> F11 or Ctrl+F</p>
+            <p><span class="material-icons" style="font-size: 0.9em;">photo_camera</span> <strong>Screenshot:</strong> Ctrl+S or Alt+S</p>
+            <p><span class="material-icons" style="font-size: 0.9em;">mouse</span> <strong>Input Capture:</strong> Click on video</p>
+            <p><span class="material-icons" style="font-size: 0.9em;">logout</span> <strong>Release Input:</strong> ESC key</p>
+          </div>
+        </details>
+        <details>
+          <summary><span class="material-icons">usb</span> Virtual USB Drive</summary>
+          <div id="usb-image-list">
+            Loading disk images...
+          </div>
+          <button id="detach-usb-btn" style="display:none;"><span class="material-icons">eject</span> Detach</button>
+          <form id="usb-upload-form">
+            <input type="file" id="usb-upload-input" accept=".img,.iso,.bin,.raw,.qcow2,.vhd,.vmdk,.dmg,.img.gz,.img.xz,.img.bz2,.zip,.gz,.xz,.bz2" style="display:none;" required onchange="uploadUsbImage()">
+            <button type="button" id="usb-upload-btn" onclick="document.getElementById('usb-upload-input').click();"><span class="material-icons">upload</span> Upload</button>
+            <progress id="usb-upload-progress" value="0" max="100" style="width:80px;display:none;margin-left:0.5em;"></progress>
+          </form>
+          <div id="usb-upload-status"></div>
+        </details>
+        <details>
+          <summary><span class="material-icons">cable</span> Network (ECM)</summary>
+          <div>
+            <label style="display:flex;align-items:center;gap:0.5em;">
+                <span class="material-icons" id="ethernet-status-icon">cable</span>
+                <span id="ethernet-status-label" style="min-width:4em;">Checking...</span>
+                <input type="checkbox" id="ethernet-switch" name="ethernet-switch" role="switch" class="switch" onchange="setEthernet(this.checked)">
+            </label>
+            <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
+          </div>
+        </details>
+        <details>
+          <summary>Theme</summary>
+          <ul>
+            <li><a href="#" data-theme-switcher="auto">Auto</a></li>
+            <li><a href="#" data-theme-switcher="light">Light</a></li>
+            <li><a href="#" data-theme-switcher="dark">Dark</a></li>
+          </ul>
+        </details>
+      </nav>
+    </aside>
+
+    <main role="main" style="display: flex; flex-direction: column; height: 100vh; width: 100vw;">
+      <div class="video-status-bar" id="video-status-bar">
+          <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Controls" aria-label="Toggle sidebar" type="button">☰</button>
+          <button id="keyboard-toggle" class="video-control-btn" title="Toggle Keyboard" aria-label="Toggle keyboard" type="button" style="margin-left:0.3em;">
+              <span class="material-icons">keyboard</span>
+          </button>
+          <span id="latency-indicator"><span class="material-icons">speed</span>--ms</span>
+          <span id="fps-indicator"><span class="material-icons">timer</span>FPS:--</span>
+          <span id="video-status"><span class="material-icons">monitor</span>Video:--</span>
+          <span id="keyboard-status"><span class="material-icons">keyboard</span></span>
+          <span id="mouse-status"><span class="material-icons">mouse</span></span>
+          <span id="storage-status"><span class="material-icons">usb</span></span>
+          <span id="ethernet-status-bar"><span class="material-icons">cable</span></span>
+          <span id="input-status"></span>
+          <span id="controls-hint" style="display:none;" class="good"><span class="material-icons">tips_and_updates</span>Tip: Hover over video for controls</span>
+          <div class="video-controls">
+              <button id="fullscreen-btn" class="video-control-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">
+                  <span class="material-icons">fullscreen</span>
+              </button>
+              <button id="screenshot-btn" class="video-control-btn" onclick="takeScreenshot()" title="Take Screenshot">
+                  <span class="material-icons">photo_camera</span>
+              </button>
+              <button id="video-quality-btn" class="video-control-btn" title="Video Quality" style="position:relative;">
+                  <span class="material-icons">settings</span>
+              </button>
+              <div id="video-quality-menu" class="video-quality-menu">
+                  <ul id="video-quality-list"></ul>
+              </div>
+          </div>
+      </div>
+      <div class="video-container">
+          <img id="videoStream" class="video-stream" src="/video.mjpg" alt="Video Stream">
+      </div>
+      <div id="virtualKeyboard" class="on-screen-keyboard">
+          <!-- Keyboard buttons will be rendered here by JavaScript -->
+      </div>
+    </main>
+    <script src="/common.js"></script>
+    <script>
+      // Ensure updateStatus is available globally before mobile.js runs
+      window.updateStatus = window.updateStatus || (typeof updateStatus === 'function' ? updateStatus : undefined);
+    </script>
+    <script src="/mobile/mobile.js"></script>
+</body>
+</html>

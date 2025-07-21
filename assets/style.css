@@ -241,37 +241,34 @@
             font-size: 24px;
         }
         .video-status-bar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
             display: flex;
-            justify-content: flex-start;
             align-items: center;
-            gap: 1rem;
-            padding: 0.25rem 0.75rem;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            font-size: 0.9rem;
-            z-index: 999; /* Below sidebar but above content */
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            gap: 1.5em;
+            background: rgba(20, 20, 20, 0.95);
+            color: #fff;
+            font-size: 1rem;
+            padding: 0.5em 1em;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            position: relative;
+            z-index: 10;
+            min-height: 40px;
         }
-        .video-status-bar > span {
-            white-space: nowrap;
+        .video-status-bar span {
+            display: flex;
+            align-items: center;
+            gap: 0.3em;
         }
-        .video-status-bar .good { color: #4ade80; }
-        .video-status-bar .warning { color: #fbbf24; }
-        .video-status-bar .bad { color: #f87171; }
-        .video-status-bar .active-input {
-            color: var(--pico-color-azure-400);
-            font-weight: bold;
+        #controls-hint.good {
+            color: #4ade80;
         }
         .no-video {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--pico-muted-color);
-            background: #111;
-            border-radius: var(--pico-border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #aaa;
+            font-size: 1.2em;
+            min-height: 320px;
         }
         .video-hint {
             text-align: center;

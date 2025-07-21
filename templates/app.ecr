@@ -9,6 +9,15 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css">
+    <script src="/common.js"></script>
+    <script>
+      // Redirect mobile devices to /mobile
+      if (/Mobi|Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent)) {
+        if (!location.pathname.startsWith('/mobile')) {
+          location.replace('/mobile');
+        }
+      }
+    </script>
 </head>
 <body>
     <aside id="sidebar" class="sidebar collapsed" role="complementary" aria-label="Controls">
@@ -110,7 +119,18 @@
             </details>
         </div>
     </aside>
-
+    <!-- Statusbar (restored) -->
+    <div class="video-status-bar" id="video-status-bar">
+        <span id="latency-indicator"><span class="material-icons">speed</span>--ms</span>
+        <span id="fps-indicator"><span class="material-icons">timer</span>FPS:--</span>
+        <span id="video-status"><span class="material-icons">monitor</span>Video:--</span>
+        <span id="keyboard-status"><span class="material-icons">keyboard</span></span>
+        <span id="mouse-status"><span class="material-icons">mouse</span></span>
+        <span id="storage-status"><span class="material-icons">usb</span></span>
+        <span id="ethernet-status-bar"><span class="material-icons">cable</span></span>
+        <span id="input-status"></span>
+        <span id="controls-hint" style="display:none;" class="good"><span class="material-icons">tips_and_updates</span>Tip: Hover over video for controls</span>
+    </div>
     <main id="main-container" class="container-fluid" role="main">
         <!-- Header -->
         <header>
@@ -121,19 +141,9 @@
 
         <!-- Video Stream -->
         <section class="video-section">
-            <div class="video-status-bar" id="video-status-bar">
-                <span id="latency-indicator"><span class="material-icons">speed</span>--ms</span>
-                <span id="fps-indicator"><span class="material-icons">timer</span>FPS:--</span>
-                <span id="video-status"><span class="material-icons">monitor</span>Video:--</span>
-                <span id="keyboard-status"><span class="material-icons">keyboard</span></span>
-                <span id="mouse-status"><span class="material-icons">mouse</span></span>
-                <span id="storage-status"><span class="material-icons">usb</span></span>
-                <span id="ethernet-status-bar"><span class="material-icons">cable</span></span>
-                <span id="input-status"></span>
-                <span id="controls-hint" style="display:none;" class="good"><span class="material-icons">tips_and_updates</span>Tip: Hover over video for controls</span>
-            </div>
+            
             <div class="video-container">
-                <img id="video-stream" class="video-stream" 
+                <img id="video-stream" class="video-stream" src="/video.mjpg"
                      alt="Live KVM Video Stream"
                      tabindex="0"
                      title="Click to capture mouse and keyboard input"
