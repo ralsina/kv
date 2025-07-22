@@ -109,14 +109,11 @@
                 </label>
                 <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
             </div>
-            <details class="dropdown">
-                <summary role="button" class="secondary">Theme</summary>
-                <ul>
-                    <li><a href="#" data-theme-switcher="auto">Auto</a></li>
-                    <li><a href="#" data-theme-switcher="light">Light</a></li>
-                    <li><a href="#" data-theme-switcher="dark">Dark</a></li>
-                </ul>
-            </details>
+            <label style="display:flex;align-items:center;gap:0.5em;margin-bottom:0;">
+                <span class="material-icons" style="font-size: 1.2em;">light_mode</span>
+                <input type="checkbox" id="theme-switch" name="theme-switch" role="switch" class="switch">
+                <span class="material-icons" style="font-size: 1.2em;">dark_mode</span>
+            </label>
         </div>
     </aside>
     <!-- Statusbar (restored) -->

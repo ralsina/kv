@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
     <link rel="stylesheet" href="/mobile/mobile.css">
+    <link rel="stylesheet" href="/video_quality_menu.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
@@ -35,8 +36,11 @@
     </script>
     <aside id="sidebar" class="sidebar collapsed" role="complementary" aria-label="Controls">
       <nav class="container">
-        <h2><span class="material-icons">tune</span> Controls</h2>
-        <details open>
+        <h2 style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="material-icons">tune</span> Controls
+          
+        </h2>
+        <details id="section-text" open>
           <summary><span class="material-icons">text_fields</span> Text Input</summary>
           <form id="text-input-form" onsubmit="event.preventDefault(); sendText();">
             <input type="text" id="text-input" placeholder="Type text to send..." maxlength="200">
@@ -44,7 +48,7 @@
           </form>
           <button onclick="pasteFromClipboard()"><span class="material-icons">content_paste</span> Paste Clipboard</button>
         </details>
-        <details>
+        <details id="section-quickkeys">
           <summary><span class="material-icons">keyboard_alt</span> Quick Keys</summary>
           <div>
             <button onclick="sendKey('enter')">Enter</button>
@@ -55,7 +59,7 @@
             <button onclick="sendKey('space')">Space</button>
           </div>
         </details>
-        <details>
+        <details id="section-shortcuts">
           <summary><span class="material-icons">shortcut</span> Shortcuts</summary>
           <div>
             <button onclick="sendCombination(['ctrl'], ['c'])">Ctrl+C</button>
@@ -67,7 +71,7 @@
             <button onclick="pasteFromClipboard()" title="Paste from your clipboard"><span class="material-icons" style="font-size: 0.8em;">content_paste</span> Paste</button>
           </div>
         </details>
-        <details>
+        <details id="section-mouse">
           <summary><span class="material-icons">mouse</span> Mouse Buttons</summary>
           <div>
             <button onclick="sendMouseClick('left')">L Click</button>
@@ -75,16 +79,7 @@
             <button onclick="sendMouseClick('middle')">M Click</button>
           </div>
         </details>
-        <details>
-          <summary><span class="material-icons">videocam</span> Video Controls</summary>
-          <div>
-            <p><span class="material-icons" style="font-size: 0.9em;">fullscreen</span> <strong>Fullscreen:</strong> F11 or Ctrl+F</p>
-            <p><span class="material-icons" style="font-size: 0.9em;">photo_camera</span> <strong>Screenshot:</strong> Ctrl+S or Alt+S</p>
-            <p><span class="material-icons" style="font-size: 0.9em;">mouse</span> <strong>Input Capture:</strong> Click on video</p>
-            <p><span class="material-icons" style="font-size: 0.9em;">logout</span> <strong>Release Input:</strong> ESC key</p>
-          </div>
-        </details>
-        <details>
+        <details id="section-usb">
           <summary><span class="material-icons">usb</span> Virtual USB Drive</summary>
           <div id="usb-image-list">
             Loading disk images...
@@ -97,7 +92,7 @@
           </form>
           <div id="usb-upload-status"></div>
         </details>
-        <details>
+        <details id="section-network">
           <summary><span class="material-icons">cable</span> Network (ECM)</summary>
           <div>
             <label style="display:flex;align-items:center;gap:0.5em;">
@@ -108,53 +103,42 @@
             <div id="ethernet-ifname" style="margin-top:0.3rem; font-size:0.85em; color:#aaa;"></div>
           </div>
         </details>
-        <details>
-          <summary>Theme</summary>
-          <ul>
-            <li><a href="#" data-theme-switcher="auto">Auto</a></li>
-            <li><a href="#" data-theme-switcher="light">Light</a></li>
-            <li><a href="#" data-theme-switcher="dark">Dark</a></li>
-          </ul>
-        </details>
+        <label style="display:flex;align-items:center;gap:0.5em;margin-bottom:0;">
+            <span class="material-icons" style="font-size: 1.2em;">light_mode</span>
+            <input type="checkbox" id="theme-switch" name="theme-switch" role="switch" class="switch">
+            <span class="material-icons" style="font-size: 1.2em;">dark_mode</span>
+        </label>
       </nav>
     </aside>
+    <div id="sidebar-overlay" class="sidebar-overlay collapsed"></div>
 
-    <main role="main" style="display: flex; flex-direction: column; height: 100vh; width: 100vw;">
-      <div class="video-status-bar" id="video-status-bar">
-          <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Controls" aria-label="Toggle sidebar" type="button">☰</button>
-          <button id="keyboard-toggle" class="video-control-btn" title="Toggle Keyboard" aria-label="Toggle keyboard" type="button" style="margin-left:0.3em;">
-              <span class="material-icons">keyboard</span>
-          </button>
+    <main role="main" class="main-container">
+      <header class="top-bar">
           <span id="latency-indicator"><span class="material-icons">speed</span>--ms</span>
           <span id="fps-indicator"><span class="material-icons">timer</span>FPS:--</span>
-          <span id="video-status"><span class="material-icons">monitor</span>Video:--</span>
           <span id="keyboard-status"><span class="material-icons">keyboard</span></span>
           <span id="mouse-status"><span class="material-icons">mouse</span></span>
           <span id="storage-status"><span class="material-icons">usb</span></span>
           <span id="ethernet-status-bar"><span class="material-icons">cable</span></span>
-          <span id="input-status"></span>
-          <span id="controls-hint" style="display:none;" class="good"><span class="material-icons">tips_and_updates</span>Tip: Hover over video for controls</span>
-          <div class="video-controls">
-              <button id="fullscreen-btn" class="video-control-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">
-                  <span class="material-icons">fullscreen</span>
-              </button>
-              <button id="screenshot-btn" class="video-control-btn" onclick="takeScreenshot()" title="Take Screenshot">
-                  <span class="material-icons">photo_camera</span>
-              </button>
-              <button id="video-quality-btn" class="video-control-btn" title="Video Quality" style="position:relative;">
-                  <span class="material-icons">settings</span>
-              </button>
-              <div id="video-quality-menu" class="video-quality-menu">
-                  <ul id="video-quality-list"></ul>
-              </div>
-          </div>
-      </div>
+      </header>
       <div class="video-container">
-          <img id="videoStream" class="video-stream" src="/video.mjpg" alt="Video Stream">
+          <div class="video-display-wrapper">
+              <img id="videoStream" class="video-stream" src="/video.mjpg" alt="Video Stream">
+          </div>
       </div>
       <div id="virtualKeyboard" class="on-screen-keyboard">
           <!-- Keyboard buttons will be rendered here by JavaScript -->
       </div>
+      <footer class="bottom-bar">
+          <button id="sidebar-toggle" class="control-btn" title="Toggle Controls" aria-label="Toggle sidebar" type="button"><span class="material-icons">menu</span></button>
+          <button id="keyboard-toggle" class="control-btn" title="Toggle Keyboard" aria-label="Toggle keyboard" type="button"><span class="material-icons">keyboard</span></button>
+          <button id="fullscreen-btn" class="control-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen"><span class="material-icons">fullscreen</span></button>
+          <button id="screenshot-btn" class="control-btn" onclick="takeScreenshot()" title="Take Screenshot"><span class="material-icons">photo_camera</span></button>
+          <button id="video-quality-btn" class="control-btn" onclick="showVideoQualityMenu()" title="Video Quality" style="position:relative;"><span class="material-icons">settings</span></button>
+          <div id="video-quality-menu" class="video-quality-menu">
+            <ul id="video-quality-list"></ul>
+          </div>
+      </footer>
     </main>
     <script src="/common.js"></script>
     <script>

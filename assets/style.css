@@ -259,6 +259,12 @@
             align-items: center;
             gap: 0.3em;
         }
+        .video-status-bar span .material-icons {
+            color: #ef4444; /* Default to red (inactive) */
+        }
+        .video-status-bar span.active .material-icons {
+            color: #4ade80; /* Green when active */
+        }
         #controls-hint.good {
             color: #4ade80;
         }
