@@ -1,137 +1,116 @@
-/* global WebSocket */
+/* global document */
+/* global setupInputWebSocket, updateStatus, refreshUsbImages, measureLatency, takeScreenshot, toggleFullscreen, sendCombination, sendMouseClick, sendMouseAbsoluteMove, sendMouseRelease, showVideoQualityMenu */
+
+// --- Mobile-Specific Initializations ---
 document.addEventListener('DOMContentLoaded', () => {
-  const videoStream = document.getElementById('videoStream')
-  const virtualKeyboard = document.getElementById('virtualKeyboard')
-  const fullscreenBtn = document.getElementById('fullscreen-btn')
+  // Initialize common components
+  setupInputWebSocket()
+  updateStatus()
+  refreshUsbImages()
+  setInterval(updateStatus, 2000)
+  setInterval(measureLatency, 5000)
 
-  // Keyboard toggle button logic
-  const keyboardToggleBtn = document.getElementById('keyboard-toggle')
-  if (keyboardToggleBtn && virtualKeyboard) {
-    keyboardToggleBtn.addEventListener('click', () => {
-      virtualKeyboard.classList.toggle('collapsed')
-      // Optionally change icon to indicate state
-      const icon = keyboardToggleBtn.querySelector('.material-icons')
-      if (virtualKeyboard.classList.contains('collapsed')) {
-        icon.textContent = 'keyboard_hide'
-      } else {
-        icon.textContent = 'keyboard'
-      }
-    })
-  }
+  // Mobile-specific features
+  setupMobileVideoStream('videoStream')
+  setupVirtualKeyboard()
+  setupMobileSidebar()
+  setupMobileButtons()
+})
 
-  window.toggleFullscreen = function () {
-    if (document.fullscreenElement) {
-      document.exitFullscreen()
-    } else {
-      document.documentElement.requestFullscreen()
-    }
-  }
+// --- Mobile Video Stream Handling (Touch as Absolute Mouse) ---
+function setupMobileVideoStream (videoElementId) {
+  const video = document.getElementById(videoElementId)
+  if (!video) return
 
-  document.addEventListener('fullscreenchange', () => {
-    const isFullscreen = !!document.fullscreenElement
-    fullscreenBtn.querySelector('.material-icons').textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen'
-  })
+  let isPointerDown = false
+  let longPressTimer = null
 
-  // Determine backend URL from current URL
-  const backendUrl = window.location.origin
-  const ws = new WebSocket(backendUrl.replace(/^http/, 'ws') + '/ws/input')
-
-  ws.onopen = () => {
-    console.log('WebSocket connected')
-  }
-
-  ws.onmessage = (event) => {
-    console.log('WebSocket message received:', event.data)
-  }
-
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error)
-  }
-
-  ws.onclose = () => {
-    console.log('WebSocket closed')
-  }
-
-  function sendWsMessage (message) {
-    console.log('Attempting to send WebSocket message:', message)
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message))
-    } else {
-      console.warn('WebSocket not open. Message not sent:', message)
-    }
-  }
-
-  // Absolute Mouse Positioning
-  let isMouseDown = false
-  let pressedButtons = [] // To track which buttons are currently pressed
-
-  function getMouseButtons (event) {
-    const buttons = []
-    if (event.buttons & 1) buttons.push('left')
-    if (event.buttons & 2) buttons.push('right')
-    if (event.buttons & 4) buttons.push('middle')
-    return buttons
-  }
-
-  videoStream.addEventListener('pointerdown', (event) => {
-    isMouseDown = true
-    pressedButtons = getMouseButtons(event)
-    const buttonName = getMouseButtonName(event.button)
-    if (buttonName) {
-      sendWsMessage({
-        type: 'mouse_press',
-        button: buttonName
-      })
-    }
-    sendAbsoluteMouseMove(event)
-  })
-
-  videoStream.addEventListener('pointermove', (event) => {
-    // Always send absolute move on pointermove
-    sendAbsoluteMouseMove(event)
-    if (isMouseDown) {
-      // If mouse is down, also handle drag (which is already covered by sendAbsoluteMouseMove)
-    }
-  })
-
-  videoStream.addEventListener('pointerup', (event) => {
-    isMouseDown = false
-    const releasedButtonName = getMouseButtonName(event.button)
-    if (releasedButtonName) {
-      sendWsMessage({
-        type: 'mouse_release',
-        button: releasedButtonName
-      })
-    }
-    pressedButtons = getMouseButtons(event)
-    sendAbsoluteMouseMove(event) // Send final position with updated button state
-  })
-
-  function getMouseButtonName (buttonCode) {
-    if (buttonCode === 0) return 'left'
-    if (buttonCode === 2) return 'right'
-    if (buttonCode === 1) return 'middle'
-    return null
-  }
-
-  function sendAbsoluteMouseMove (event) {
-    const rect = videoStream.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
-
-    // Scale to 0-32767 range
+  const getCoords = (e) => {
+    const rect = video.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
     const absX = Math.round((x / rect.width) * 32767)
     const absY = Math.round((y / rect.height) * 32767)
-
-    sendWsMessage({
-      type: 'mouse_absolute',
-      x: absX,
-      y: absY,
-      buttons: pressedButtons
-    })
+    return { absX, absY }
   }
 
-  // Virtual Keyboard
+  video.addEventListener('pointerdown', (e) => {
+    e.preventDefault()
+    isPointerDown = true
+    const { absX, absY } = getCoords(e)
+
+    // The move event now carries the button press information
+    sendMouseAbsoluteMove(absX, absY, ['left'])
+
+    // Set a timer for right-click (long press)
+    longPressTimer = setTimeout(() => {
+      sendMouseRelease('left') // Release the left-click from the initial press
+      sendMouseClick('right') // Send a right-click
+      isPointerDown = false // Prevent further move/up events for this interaction
+    }, 500) // 500ms for long press
+  })
+
+  video.addEventListener('pointermove', (e) => {
+    if (!isPointerDown) return
+    e.preventDefault()
+    clearTimeout(longPressTimer) // Cancel the long-press timer
+
+    const { absX, absY } = getCoords(e)
+    sendMouseAbsoluteMove(absX, absY, ['left'])
+  })
+
+  video.addEventListener('pointerup', (e) => {
+    if (!isPointerDown) return
+    e.preventDefault()
+    clearTimeout(longPressTimer)
+
+    // Get final coordinates for the 'up' event
+    const { absX, absY } = getCoords(e)
+
+    // Send an absolute move event with NO buttons pressed to signify release
+    sendMouseAbsoluteMove(absX, absY, [])
+
+    isPointerDown = false
+  })
+
+  // Prevent context menu on video
+  video.addEventListener('contextmenu', (e) => e.preventDefault())
+}
+
+// --- Mobile UI Setup ---
+function setupMobileSidebar () {
+  const sidebar = document.getElementById('sidebar')
+  const overlay = document.getElementById('sidebar-overlay')
+  const toggle = document.getElementById('sidebar-toggle')
+
+  const openSidebar = () => {
+    sidebar.classList.remove('collapsed')
+    overlay.classList.remove('collapsed')
+  }
+  const closeSidebar = () => {
+    sidebar.classList.add('collapsed')
+    overlay.classList.add('collapsed')
+  }
+
+  toggle.addEventListener('click', openSidebar)
+  overlay.addEventListener('click', closeSidebar)
+}
+
+function setupMobileButtons () {
+  document.getElementById('keyboard-toggle')?.addEventListener('click', () => document.getElementById('virtualKeyboard').classList.toggle('collapsed'))
+  document.getElementById('fullscreen-btn')?.addEventListener('click', toggleFullscreen)
+  document.getElementById('screenshot-btn')?.addEventListener('click', takeScreenshot)
+  document.getElementById('video-quality-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    showVideoQualityMenu()
+  })
+}
+
+// --- Virtual Keyboard ---
+function setupVirtualKeyboard () {
+  const keyboardContainer = document.getElementById('virtualKeyboard')
+  if (!keyboardContainer) return
+
   let shiftOn = false
   let ctrlOn = false
   let altOn = false
@@ -140,203 +119,75 @@ document.addEventListener('DOMContentLoaded', () => {
   const baseKeys = [
     ['esc', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'backspace'],
     ['tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
-    // Add invisible key left of 'a' and right of 'up'
-    ['invisible', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', 'enter'],
-    ['shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'up', 'invisible'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', 'enter'],
+    ['shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'up'],
     ['ctrl', 'win', 'alt', 'space', 'menu', 'left', 'down', 'right']
   ]
+  const shiftMap = { 1: '!', 2: '@', 3: '#', 4: '$', 5: '%', 6: '^', 7: '&', 8: '*', 9: '(', 0: ')', '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|', ';': ':', "'": '"', ',': '<', '.': '>', '/': '?' }
 
-  const shiftMap = {
-    1: '!',
-    2: '@',
-    3: '#',
-    4: '$',
-    5: '%',
-    6: '^',
-    7: '&',
-    8: '*',
-    9: '(',
-    0: ')',
-    '-': '_',
-    '=': '+',
-    '[': '{',
-    ']': '}',
-    '\\': '|',
-    ';': ':',
-    '\'': '"',
-    ',': '<',
-    '.': '>',
-    '/': '?'
+  const renderKeyboard = () => {
+    keyboardContainer.innerHTML = ''
+    baseKeys.forEach(row => {
+      const rowDiv = document.createElement('div')
+      rowDiv.className = 'key-row'
+      row.forEach(key => {
+        const btn = document.createElement('button')
+        btn.className = 'key'
+        btn.dataset.key = key
+
+        let display = key
+        if (key.length === 1) {
+          display = shiftOn ? (shiftMap[key] || key.toUpperCase()) : key
+        } else {
+          const iconMap = { up: '↑', down: '↓', left: '←', right: '→', backspace: '⌫', enter: '⏎', tab: '⇥', shift: '⇧', space: ' ' }
+          if (iconMap[key]) display = iconMap[key]
+        }
+
+        btn.innerHTML = display
+        btn.classList.add(key.length > 1 ? `key-${key}` : `key-${key.charCodeAt(0)}`)
+        if (key === 'space') btn.classList.add('space')
+
+        if (['shift', 'ctrl', 'alt', 'win'].includes(key)) {
+          btn.classList.add('modifier')
+        }
+
+        if ((key === 'shift' && shiftOn) || (key === 'ctrl' && ctrlOn) || (key === 'alt' && altOn) || (key === 'win' && metaOn)) {
+          btn.classList.add('active')
+        }
+
+        btn.addEventListener('click', () => handleKeyPress(key))
+        rowDiv.appendChild(btn)
+      })
+      keyboardContainer.appendChild(rowDiv)
+    })
   }
 
-  function getActiveModifiers () {
-    const mods = []
-    if (ctrlOn) mods.push('control')
-    if (altOn) mods.push('alt')
-    if (shiftOn) mods.push('shift')
-    if (metaOn) mods.push('meta')
-    return mods
-  }
-
-  function handleKeyPress (key) {
+  const handleKeyPress = (key) => {
     const lowerKey = key.toLowerCase()
-    let sendKey = key
-    let type = 'key_press'
-    let keysToSend = [] // Initialize as empty array
-
-    // Handle modifier keys first
-    if (lowerKey === 'ctrl') {
+    if (lowerKey === 'shift') {
+      shiftOn = !shiftOn
+    } else if (lowerKey === 'ctrl') {
       ctrlOn = !ctrlOn
-      keysToSend = ['control'] // Send 'control' as the key
     } else if (lowerKey === 'alt') {
       altOn = !altOn
-      keysToSend = ['alt'] // Send 'alt' as the key
-    } else if (lowerKey === 'shift') {
-      shiftOn = !shiftOn
-      keysToSend = ['shift'] // Send 'shift' as the key
     } else if (lowerKey === 'win') {
       metaOn = !metaOn
-      keysToSend = ['meta'] // Send 'meta' as the key
     } else {
-      // Handle other keys
-      if (lowerKey === 'menu') {
-        sendKey = 'contextmenu'
-      } else if (lowerKey === 'space') {
-        sendKey = 'space'
-      } else if (lowerKey === 'tab') {
-        sendKey = 'tab'
-      } else if (lowerKey === 'enter') {
-        sendKey = 'enter'
-      } else if (lowerKey === 'backspace') {
-        sendKey = 'backspace'
-      } else if (lowerKey === 'esc') {
-        sendKey = 'escape'
-      } else if (['left', 'right', 'up', 'down'].includes(lowerKey)) {
-        sendKey = lowerKey // Arrow keys are already lowercase
-      } else {
-        // Handle letter/number/symbol keys
-        if (shiftOn) {
-          if (key.length === 1 && /[a-z]/.test(key)) {
-            sendKey = key.toUpperCase()
-          } else if (shiftMap[key]) {
-            sendKey = shiftMap[key]
-          }
-        }
+      const modifiers = []
+      if (shiftOn) modifiers.push('shift')
+      if (ctrlOn) modifiers.push('ctrl')
+      if (altOn) modifiers.push('alt')
+      if (metaOn) modifiers.push('meta')
+
+      let finalKey = lowerKey
+      if (shiftOn && lowerKey.length === 1) {
+        finalKey = shiftMap[lowerKey] || lowerKey.toUpperCase()
       }
-      keysToSend = [sendKey] // For non-modifier keys, keysToSend is just the single key
+
+      sendCombination(modifiers, [finalKey])
     }
-
-    const modifiers = getActiveModifiers() // Get updated modifiers after state changes
-
-    // Determine message type: key_combination if any modifiers are active or multiple keys are sent
-    if (modifiers.length > 0 || keysToSend.length > 1) {
-      type = 'key_combination'
-    } else {
-      type = 'key_press' // Default for single key without modifiers
-    }
-
-    const messageToSend = {
-      type,
-      modifiers
-    }
-
-    if (type === 'key_press') {
-      messageToSend.key = keysToSend[0]
-    } else {
-      messageToSend.keys = keysToSend
-    }
-    console.log('Sending WebSocket message:', messageToSend)
-    sendWsMessage(messageToSend)
-
-    renderKeyboard() // Re-render to update modifier key states
-  }
-
-  function renderKeyboard () {
-    virtualKeyboard.innerHTML = ''
-    baseKeys.forEach(rowKeys => {
-      const rowDiv = document.createElement('div')
-      rowDiv.classList.add('key-row')
-      rowKeys.forEach(key => {
-        const keyDiv = document.createElement('div')
-        keyDiv.classList.add('key')
-        keyDiv.dataset.key = key
-        if (key === 'invisible') {
-          keyDiv.style.visibility = 'hidden'
-          keyDiv.style.pointerEvents = 'none'
-        } else {
-          let displayKey = key
-          if (key.length === 1 && /[a-z]/.test(key)) {
-            displayKey = shiftOn ? key.toUpperCase() : key.toLowerCase()
-          } else if (shiftOn && shiftMap[key]) {
-            displayKey = shiftMap[key]
-          }
-          if (key === 'up') displayKey = '↑'
-          if (key === 'down') displayKey = '↓'
-          if (key === 'left') displayKey = '←'
-          if (key === 'right') displayKey = '→'
-          if (key === 'backspace') displayKey = '⌫'
-          if (key === 'enter') displayKey = '⏎'
-          if (key === 'tab') displayKey = '⇥'
-          if (key === 'shift') displayKey = '⇧'
-          if (key === 'shift') {
-            keyDiv.classList.add('modifier')
-            if (shiftOn) keyDiv.classList.add('active')
-          }
-          if (key === 'ctrl') {
-            keyDiv.classList.add('modifier')
-            if (ctrlOn) keyDiv.classList.add('active')
-          }
-          if (key === 'alt') {
-            keyDiv.classList.add('modifier')
-            if (altOn) keyDiv.classList.add('active')
-          }
-          if (key === 'space') {
-            keyDiv.classList.add('space')
-            keyDiv.style.flex = '8 1 0'
-            keyDiv.style.minWidth = '310px'
-          }
-          if (key === 'backspace') keyDiv.classList.add('backspace')
-          if (key === 'enter') {
-            keyDiv.classList.add('enter')
-            keyDiv.style.flex = '2.3 1 0'
-            keyDiv.style.minWidth = '90px'
-          }
-          if (key === 'tab') keyDiv.classList.add('tab')
-          if (key === 'esc') displayKey = 'Esc'
-          if (key === 'win') {
-            keyDiv.classList.add('modifier')
-            if (metaOn) keyDiv.classList.add('active')
-          }
-          if (key === 'menu') {
-            displayKey = ''
-            keyDiv.innerHTML = '<span class="material-icons" style="font-size:1.1em;vertical-align:middle;">menu</span>'
-          } else {
-            keyDiv.textContent = displayKey
-          }
-          keyDiv.addEventListener('click', () => handleKeyPress(key))
-        }
-        rowDiv.appendChild(keyDiv)
-      })
-      virtualKeyboard.appendChild(rowDiv)
-    })
-  }
-
-  // Video quality menu button event
-  const videoQualityBtn = document.getElementById('video-quality-btn')
-  if (videoQualityBtn) {
-    videoQualityBtn.addEventListener('click', e => {
-      e.stopPropagation()
-      const menu = document.getElementById('video-quality-menu')
-      if (menu.classList.contains('active')) {
-        window.hideVideoQualityMenu()
-      } else {
-        window.updateStatus() // Call updateStatus to populate the menu
-        window.showVideoQualityMenu()
-      }
-    })
+    renderKeyboard()
   }
 
   renderKeyboard()
-  setInterval(window.updateStatus, 2000)
-  setInterval(window.measureLatency, 5000)
-})
+}
