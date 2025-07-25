@@ -76,8 +76,8 @@ html, body {
 .key {
     flex-grow: 1; /* Distribute space evenly among keys in a row */
     margin: 2px; /* Small margin around each key */
-    padding: 10px 5px;
-    font-size: 1em;
+    padding: 5px 2px; /* Reduced padding */
+    font-size: 0.75em; /* Smaller font size */
     background-color: var(--pico-secondary-background); /* Semantic color for keys */
     color: var(--pico-secondary-color);
     border: 1px solid var(--pico-secondary-border-color);
