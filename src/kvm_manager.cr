@@ -176,6 +176,7 @@ class KVMManagerV4cr
   @height : UInt32
   @fps : Int32
   @pressed_buttons = Set(String).new
+  @pressed_keys = Set(String).new
   @mass_storage : MassStorageManager
   @video_capture : V4crVideoCapture
   @video_jpeg_quality : Int32 = 100
@@ -311,10 +312,29 @@ class KVMManagerV4cr
   end
 
   def send_keys(keys : Array(String), modifiers : Array(String) = [] of String)
-    report = HIDKeyboard.create_keyboard_report(keys, modifiers)
+    # Track keys before sending to prevent duplicates
+    keys.each do |key|
+      if @pressed_keys.includes?(key)
+        Log.warn { "Key '#{key}' is already pressed, skipping to prevent duplicate" }
+        next
+      end
+      @pressed_keys.add(key)
+    end
+
+    # Remove any keys that were skipped
+    active_keys = keys.select { |key| @pressed_keys.includes?(key) }
+    return {success: false, message: "No valid keys to send"} if active_keys.empty?
+
+    report = HIDKeyboard.create_keyboard_report(active_keys, modifiers)
     HIDKeyboard.send_keyboard_report(@keyboard_device.to_s, report)
-    {success: true, message: "Keys sent: #{keys.join("+")}"}
+
+    # Remove keys from pressed state after successful send
+    active_keys.each { |key| @pressed_keys.delete(key) }
+
+    {success: true, message: "Keys sent: #{active_keys.join("+")}"}
   rescue ex
+    # Clear pressed keys on error
+    keys.each { |key| @pressed_keys.delete(key) }
     Log.error { "Failed to send keys: #{ex.message}" }
     {success: false, message: "Error sending keys: #{ex.message}"}
   end
@@ -330,6 +350,37 @@ class KVMManagerV4cr
     rescue ex
       Log.error { "Failed to send text: #{ex.message}" }
       {success: false, message: "Error sending text: #{ex.message}"}
+    end
+  end
+
+  # Emergency method to release all stuck keys
+  def release_all_keys
+    return {success: false, message: "Keyboard not available"} unless @keyboard_enabled
+    return {success: false, message: "No keyboard device"} unless @keyboard_device
+
+    begin
+      Log.info { "Releasing all stuck keys (#{@pressed_keys.size} keys)" }
+
+      # Send empty report to release all keys
+      empty_report = Bytes.new(8, 0_u8)
+      HIDKeyboard.send_keyboard_report(@keyboard_device, empty_report)
+
+      # Clear pressed keys state
+      released_keys = @pressed_keys.size
+      @pressed_keys.clear
+
+      # Also clear any stuck mouse buttons
+      if !@pressed_buttons.empty?
+        Log.info { "Releasing stuck mouse buttons (#{@pressed_buttons.size} buttons)" }
+        @pressed_buttons.clear
+        # Send empty mouse report
+        HIDMouse.send_mouse_move_with_buttons(@mouse_device, 0, 0, [] of String)
+      end
+
+      {success: true, message: "Released #{released_keys} keys and #{@pressed_buttons.size} mouse buttons"}
+    rescue ex
+      Log.error { "Failed to release keys: #{ex.message}" }
+      {success: false, message: "Error releasing keys: #{ex.message}"}
     end
   end
 
