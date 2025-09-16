@@ -1,4 +1,12 @@
-## [0.9.2] - 2025-09-16
+## [0.10.0] - 2025-09-16
+
+### 🚀 Features
+
+- Add automatic video device re-detection and recovery
+
+### 💼 Other
+
+- Release v0.9.2
 
 ### 🧪 Testing
 
@@ -6,6 +14,7 @@
 
 ### ⚙️ Miscellaneous Tasks
 
+- Release script
 - Release script
 ## [0.8.0] - 2025-07-21
 

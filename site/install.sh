@@ -7,7 +7,7 @@ INSTALL_DIR="/usr/local/bin"
 SERVICE_DIR="/etc/systemd/system"
 SERVICE_NAME="kv.service"
 BINARY_NAME="kv"
-VERSION="0.9.2" # Hardcoded version
+VERSION="0.10.0" # Hardcoded version
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "${TEMP_DIR}"' EXIT ERR INT TERM # Ensure cleanup
 
