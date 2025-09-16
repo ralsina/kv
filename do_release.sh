@@ -9,7 +9,6 @@ sed "s/^VERSION=.*$/VERSION=\"$VERSION\" # Hardcoded version/g" -i site/install.
 ./build_static.sh
 git add shard.yml
 git add site/install.sh
-# hace lint test
 git cliff --bump -o
 git commit -a -m "bump: Release v$VERSION"
 git tag "v$VERSION"
