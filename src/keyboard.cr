@@ -4,6 +4,40 @@ require "file_utils"
 module HIDKeyboard
   Log = ::Log.for(self)
 
+  # Helper method for writing to HID device with retry mechanism
+  private def self.write_with_retry(fd : Int32, data : Bytes, operation_name : String) : Bool
+    max_retries = 5
+    retry_delay = 0.001.seconds # Start with 1ms
+
+    max_retries.times do |attempt|
+      bytes_written = LibC.write(fd, data, data.size)
+
+      if bytes_written == data.size
+        return true # Success
+      elsif bytes_written < 0
+        errno_val = Errno.value
+        if errno_val == Errno::EAGAIN || errno_val == Errno::EWOULDBLOCK
+          if attempt < max_retries - 1
+            Log.debug { "#{operation_name} would block, retry #{attempt + 1}/#{max_retries} in #{retry_delay.total_milliseconds}ms" }
+            sleep retry_delay
+            retry_delay *= 2 # Exponential backoff
+            next
+          else
+            Log.warn { "#{operation_name} would block after #{max_retries} retries - host may not be reading HID reports" }
+          end
+        else
+          Log.error { "#{operation_name} failed with errno: #{errno_val}" }
+        end
+      else
+        Log.error { "#{operation_name} incomplete: #{bytes_written}/#{data.size} bytes" }
+      end
+
+      return false # Failure
+    end
+
+    false
+  end
+
   # Key modifier mappings
   KMOD = {
     "ctrl"        => 0x01_u8,
@@ -176,41 +210,18 @@ module HIDKeyboard
     begin
       # Send the key report (key press)
       Log.debug { "Writing key press: #{report.map { |byte| "%02x" % byte }.join(" ")}" }
-      bytes_written = LibC.write(fd, report, report.size)
-      if bytes_written < 0
-        errno_val = Errno.value
-        if errno_val == Errno::EAGAIN || errno_val == Errno::EWOULDBLOCK
-          Log.warn { "Key press write would block - host may not be reading HID reports" }
-        else
-          Log.error { "Key press write failed with errno: #{errno_val}" }
-        end
-        return
-      elsif bytes_written != report.size
-        Log.error { "Key press write incomplete: #{bytes_written}/#{report.size} bytes" }
-        return
-      end
+      press_success = write_with_retry(fd, report, "Key press")
 
-      # Minimal delay to separate key press and release (optimized for ultra-low latency)
-      sleep 0.00001.seconds
+      # Minimal delay to separate key press and release
+      sleep 0.001.seconds
 
-      # Send key release (empty report) - exact C pattern: memset(report, 0x0, sizeof(report)); write(fd, report, to_send);
+      # Always attempt to send key release, even if press failed
+      # This prevents keys from getting stuck
       empty_report = Bytes.new(8, 0_u8)
       Log.debug { "Writing key release: #{empty_report.map { |byte| "%02x" % byte }.join(" ")}" }
-      bytes_written = LibC.write(fd, empty_report, empty_report.size)
-      if bytes_written < 0
-        errno_val = Errno.value
-        if errno_val == Errno::EAGAIN || errno_val == Errno::EWOULDBLOCK
-          Log.warn { "Key release write would block - host may not be reading HID reports" }
-        else
-          Log.error { "Key release write failed with errno: #{errno_val}" }
-        end
-        return
-      elsif bytes_written != empty_report.size
-        Log.error { "Key release write incomplete: #{bytes_written}/#{empty_report.size} bytes" }
-        return
-      end
+      release_success = write_with_retry(fd, empty_report, "Key release")
 
-      Log.debug { "HID write completed successfully" }
+      Log.debug { "HID write completed - press: #{press_success}, release: #{release_success}" }
     ensure
       LibC.close(fd)
     end
@@ -257,31 +268,17 @@ module HIDKeyboard
       begin
         # Send key press
         Log.debug { "Text char '#{char}' press: #{report.map { |byte| "%02x" % byte }.join(" ")}" }
-        bytes_written = LibC.write(fd, report, report.size)
-        if bytes_written < 0
-          errno_val = Errno.value
-          if errno_val == Errno::EAGAIN || errno_val == Errno::EWOULDBLOCK
-            Log.warn { "Text write would block for char '#{char}'" }
-          else
-            Log.error { "Text write failed for char '#{char}' with errno: #{errno_val}" }
-          end
-          next
-        end
+        press_success = write_with_retry(fd, report, "Text char '#{char}' press")
 
-        sleep 0.00001.seconds
+        sleep 0.001.seconds
 
         # Send key release (clear report like C code)
         empty_report = Bytes.new(8, 0_u8)
         Log.debug { "Text char '#{char}' release: #{empty_report.map { |byte| "%02x" % byte }.join(" ")}" }
-        bytes_written = LibC.write(fd, empty_report, empty_report.size)
-        if bytes_written < 0
-          errno_val = Errno.value
-          if errno_val == Errno::EAGAIN || errno_val == Errno::EWOULDBLOCK
-            Log.warn { "Text release write would block for char '#{char}'" }
-          else
-            Log.error { "Text release write failed for char '#{char}' with errno: #{errno_val}" }
-          end
-        end
+        release_success = write_with_retry(fd, empty_report, "Text char '#{char}' release")
+
+        # Only continue to next character if both press and release succeeded
+        break unless press_success && release_success
 
         sleep 0.001.seconds # Minimal delay between characters for ultra-fast typing
       ensure

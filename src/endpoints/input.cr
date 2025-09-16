@@ -135,5 +135,13 @@ ws "/ws/input" do |socket|
 
   socket.on_close do
     Log.debug { "WebSocket client disconnected" }
+
+    # Release any stuck keys when client disconnects
+    begin
+      result = manager.release_all_keys
+      Log.info { "Cleanup on disconnect: #{result[:message]}" }
+    rescue ex
+      Log.error { "Failed to cleanup stuck keys on disconnect: #{ex.message}" }
+    end
   end
 end
