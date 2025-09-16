@@ -1,9 +1,9 @@
 require "./spec_helper"
 
-describe Kv do
+describe Main do
   # TODO: Write tests
 
-  it "works" do
-    false.should be_true
+  it "has a version" do
+    Main::VERSION.should match(/\d+\.\d+\.\d+/)
   end
 end

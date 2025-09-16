@@ -1,2 +1,2 @@
 require "spec"
-require "../src/kv"
+require "../src/main"
