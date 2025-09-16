@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(crystal:*)",
+      "Bash(ameba:*)",
+      "Bash(shards install:*)",
+      "Bash(./bin/kv:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(gh pr create:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -501,30 +501,38 @@ class KVMManagerV4cr
   end
 
   def status
+    device_available = video_device_available?
+    device_accessible = @video_capture.device_available?
+
     video_status = if @video_capture.running?
                      info = @video_capture.device_info
                      {
-                       status:           "running",
-                       device:           @video_device,
-                       resolution:       "#{@width}x#{@height}",
-                       fps:              @fps,
-                       actual_fps:       @video_capture.actual_fps,
-                       stream_url:       "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
-                       driver:           info.try(&.[:driver]) || "unknown",
-                       card:             info.try(&.[:card]) || "unknown",
-                       format:           info.try(&.[:format]) || "unknown",
-                       capture_type:     "v4cr",
-                       qualities:        available_qualities,
-                       selected_quality: selected_quality,
-                       jpeg_quality:     @video_jpeg_quality,
+                       status:            "running",
+                       device:            @video_device,
+                       device_available:  device_available,
+                       device_accessible: device_accessible,
+                       resolution:        "#{@width}x#{@height}",
+                       fps:               @fps,
+                       actual_fps:        @video_capture.actual_fps,
+                       stream_url:        "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
+                       driver:            info.try(&.[:driver]) || "unknown",
+                       card:              info.try(&.[:card]) || "unknown",
+                       format:            info.try(&.[:format]) || "unknown",
+                       capture_type:      "v4cr",
+                       qualities:         available_qualities,
+                       selected_quality:  selected_quality,
+                       jpeg_quality:      @video_jpeg_quality,
                      }
                    else
                      {
-                       status:           "stopped",
-                       capture_type:     "v4cr",
-                       qualities:        available_qualities,
-                       selected_quality: selected_quality,
-                       jpeg_quality:     @video_jpeg_quality,
+                       status:            "stopped",
+                       device:            @video_device,
+                       device_available:  device_available,
+                       device_accessible: device_accessible,
+                       capture_type:      "v4cr",
+                       qualities:         available_qualities,
+                       selected_quality:  selected_quality,
+                       jpeg_quality:      @video_jpeg_quality,
                      }
                    end
 
@@ -615,6 +623,27 @@ class KVMManagerV4cr
 
   def video_capture : V4crVideoCapture
     @video_capture
+  end
+
+  # Handle video device re-detection if current device fails
+  def handle_video_device_failure : Bool
+    Log.warn { "Handling video device failure for #{@video_device}" }
+
+    # Try to redetect and switch the video capture device
+    if @video_capture.redetect_and_switch_device
+      # Update our stored device path to match the new one
+      @video_device = @video_capture.device_path
+      Log.info { "Successfully switched video device to #{@video_device}" }
+      true
+    else
+      Log.error { "Failed to find alternative video device" }
+      false
+    end
+  end
+
+  # Check if current video device is available
+  def video_device_available? : Bool
+    File.exists?(@video_device)
   end
 
   private def get_server_port

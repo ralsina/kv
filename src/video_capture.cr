@@ -61,6 +61,9 @@ class V4crVideoCapture
     return false unless File.exists?(@device_path)
 
     begin
+      # Ensure device is closed before reopening
+      cleanup
+      @device = V4cr::Device.new(@device_path)
       device = @device
       device.open
 
@@ -194,6 +197,65 @@ class V4crVideoCapture
     @actual_fps
   end
 
+  def device_path : String
+    @device_path
+  end
+
+  # Check if current device is still available
+  def device_available? : Bool
+    File.exists?(@device_path) && @device.open?
+  end
+
+  # Attempt to find and switch to an available video device
+  def redetect_and_switch_device : Bool
+    Log.warn { "Current video device #{@device_path} is no longer available, attempting re-detection..." }
+
+    # First, clean up the current device
+    cleanup
+
+    # Try to find a new available device
+    0.upto(9) do |i|
+      candidate_path = "/dev/video#{i}"
+      next unless File.exists?(candidate_path)
+      next if candidate_path == @device_path # Skip the failed device
+
+      Log.info { "Testing video device #{candidate_path}..." }
+
+      # Test if this device works
+      if test_device_compatibility(candidate_path)
+        Log.info { "Successfully switched from #{@device_path} to #{candidate_path}" }
+        @device_path = candidate_path
+        @device = V4cr::Device.new(@device_path)
+        return true
+      end
+    end
+
+    Log.error { "No alternative video devices found that are compatible" }
+    false
+  end
+
+  # Test if a device is compatible with our requirements
+  private def test_device_compatibility(device_path : String) : Bool
+    test_device = V4cr::Device.new(device_path)
+    test_device.open
+
+    capability = test_device.query_capability
+    unless capability.video_capture?
+      test_device.close
+      return false
+    end
+
+    # Try to set the format we need
+    test_device.set_format(@width, @height, V4cr::LibV4L2::V4L2_PIX_FMT_MJPG)
+
+    test_device.close
+    Log.debug { "Device #{device_path} is compatible" }
+    true
+  rescue e
+    Log.debug { "Device #{device_path} is not compatible: #{e.message}" }
+    false
+  end
+
   private def reencode_frame(frame_data : Bytes) : Bytes
     return frame_data if @quality == 100
 
@@ -238,6 +300,9 @@ class V4crVideoCapture
   private def start_streaming_fiber
     @streaming_fiber = spawn do
       device = @device
+      consecutive_errors = 0
+      last_device_check = Time.monotonic
+
       loop do
         select
         when @stop_channel.receive?
@@ -256,6 +321,7 @@ class V4crVideoCapture
           if valid_jpeg
             broadcast_frame(data)
             @frame_count += 1
+            consecutive_errors = 0 # Reset error counter on successful frame
           else
             Log.debug { "Skipping invalid JPEG frame (size: #{size})" }
           end
@@ -273,11 +339,52 @@ class V4crVideoCapture
 
           Fiber.yield
         rescue ex : V4cr::Error
-          Log.error(exception: ex) { "V4L2 error in streaming fiber" }
+          consecutive_errors += 1
+          Log.error(exception: ex) { "V4L2 error in streaming fiber (error ##{consecutive_errors})" }
+
+          # If we have multiple consecutive errors, check if device is still available
+          if consecutive_errors >= 3
+            now = Time.monotonic
+            # Only check device availability every 5 seconds to avoid excessive checks
+            if (now - last_device_check) >= 5.seconds
+              last_device_check = now
+              unless device_available?
+                Log.warn { "Video device appears to be unavailable, attempting re-detection..." }
+                if redetect_and_switch_device
+                  Log.info { "Successfully switched to new video device, restarting streaming..." }
+                  # Restart streaming with new device
+                  if initialize_device
+                    device = @device
+                    begin
+                      device.request_buffers(4)
+                      device.buffer_manager.each do |buf|
+                        device.queue_buffer(buf)
+                      end
+                      device.start_streaming
+                      consecutive_errors = 0
+                      Log.info { "Streaming restarted successfully with new device" }
+                      next
+                    rescue ex
+                      Log.error { "Failed to restart streaming with new device: #{ex.message}" }
+                    end
+                  end
+                else
+                  Log.error { "Failed to find alternative video device, stopping streaming" }
+                  break
+                end
+              end
+            end
+          end
+
           sleep 1.second
         rescue ex
           Log.error(exception: ex) { "Unknown error in streaming fiber" }
-          break
+          consecutive_errors += 1
+          if consecutive_errors >= 10
+            Log.error { "Too many consecutive errors, stopping streaming fiber" }
+            break
+          end
+          sleep 1.second
         end
       end
       Log.info { "Streaming fiber stopped." }
