@@ -70,3 +70,4 @@ Always verify builds by:
 1. Building the main binary: `crystal build --release src/main.cr -o bin/kv`
 2. Checking the binary runs and shows help: `./bin/kv --help`
 3. Running linter: `ameba --fix src/ spec/`
+- Do not build, user builds manually

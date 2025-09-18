@@ -64,6 +64,7 @@ module HIDComposite
     enable_mass_storage : Bool = false,
     storage_file : String? = nil,
     enable_ecm : Bool = false,
+    enable_mouse : Bool = true,
   )
     Log.debug { "setup_usb_composite_gadget called with enable_mass_storage=#{enable_mass_storage.inspect}, storage_file=#{storage_file.inspect}, enable_ecm=#{enable_ecm.inspect}" }
     gadget = "kv_composite" # Composite gadget name
@@ -104,22 +105,27 @@ module HIDComposite
     # Create directories if they don't exist
     FileUtils.mkdir_p "#{base}/strings/0x409"
     FileUtils.mkdir_p "#{base}/configs/c.1/strings/0x409"
-    FileUtils.mkdir_p "#{base}/functions/hid.keyboard"       # Keyboard function
-    FileUtils.mkdir_p "#{base}/functions/hid.mouse"          # Relative mouse function
-    FileUtils.mkdir_p "#{base}/functions/hid.mouse_absolute" # Absolute mouse function
+    FileUtils.mkdir_p "#{base}/functions/hid.keyboard" # Keyboard function (always enabled)
+    # Create mouse functions if enabled
+    if enable_mouse
+      FileUtils.mkdir_p "#{base}/functions/hid.mouse"          # Relative mouse function
+      FileUtils.mkdir_p "#{base}/functions/hid.mouse_absolute" # Absolute mouse function
+    end
 
     # Create mass storage function if enabled
     if enable_mass_storage && storage_file
       FileUtils.mkdir_p "#{base}/functions/mass_storage.0"
     end
 
-    # Always create ECM (Ethernet) function
-    FileUtils.mkdir_p "#{base}/functions/ecm.usb0"
-    # Set MAC addresses (use fixed or random, but must be different)
-    dev_mac = "02:00:00:00:00:01"
-    host_mac = "02:00:00:00:00:02"
-    File.write "#{base}/functions/ecm.usb0/dev_addr", dev_mac
-    File.write "#{base}/functions/ecm.usb0/host_addr", host_mac
+    # Create ECM (Ethernet) function if enabled
+    if enable_ecm
+      FileUtils.mkdir_p "#{base}/functions/ecm.usb0"
+      # Set MAC addresses (use fixed or random, but must be different)
+      dev_mac = "02:00:00:00:00:01"
+      host_mac = "02:00:00:00:00:02"
+      File.write "#{base}/functions/ecm.usb0/dev_addr", dev_mac
+      File.write "#{base}/functions/ecm.usb0/host_addr", host_mac
+    end
     # File.write "#{base}/functions/ecm.usb0/ifname", @@ethernet_ifname
 
     # Write config files
@@ -149,90 +155,93 @@ module HIDComposite
     ]
     File.open("#{base}/functions/hid.keyboard/report_desc", "wb") { |outf| outf.write(keyboard_desc) }
 
-    # Configure relative mouse function
-    File.write "#{base}/functions/hid.mouse/protocol", "2" # Mouse protocol
-    File.write "#{base}/functions/hid.mouse/subclass", "1"
-    File.write "#{base}/functions/hid.mouse/report_length", "4" # 4 bytes: buttons + X + Y + wheel
+    # Configure mouse functions if enabled
+    if enable_mouse
+      # Configure relative mouse function
+      File.write "#{base}/functions/hid.mouse/protocol", "2" # Mouse protocol
+      File.write "#{base}/functions/hid.mouse/subclass", "1"
+      File.write "#{base}/functions/hid.mouse/report_length", "4" # 4 bytes: buttons + X + Y + wheel
 
-    # HID report descriptor for standard relative mouse with wheel support
-    mouse_desc = Bytes[
-      0x05, 0x01, # Usage Page (Generic Desktop)
-      0x09, 0x02, # Usage (Mouse)
-      0xa1, 0x01, # Collection (Application)
-      0x09, 0x01, # Usage (Pointer)
-      0xa1, 0x00, # Collection (Physical)
+      # HID report descriptor for standard relative mouse with wheel support
+      mouse_desc = Bytes[
+        0x05, 0x01, # Usage Page (Generic Desktop)
+        0x09, 0x02, # Usage (Mouse)
+        0xa1, 0x01, # Collection (Application)
+        0x09, 0x01, # Usage (Pointer)
+        0xa1, 0x00, # Collection (Physical)
 
-      # Button definitions (3 buttons)
-      0x05, 0x09, # Usage Page (Button)
-      0x19, 0x01, # Usage Minimum (1)
-      0x29, 0x03, # Usage Maximum (3)
-      0x15, 0x00, # Logical Minimum (0)
-      0x25, 0x01, # Logical Maximum (1)
-      0x95, 0x03, # Report Count (3)
-      0x75, 0x01, # Report Size (1)
-      0x81, 0x02, # Input (Data,Var,Abs)
-      0x95, 0x01, # Report Count (1)
-      0x75, 0x05, # Report Size (5)
-      0x81, 0x03, # Input (Cnst,Var,Abs) - padding
+        # Button definitions (3 buttons)
+        0x05, 0x09, # Usage Page (Button)
+        0x19, 0x01, # Usage Minimum (1)
+        0x29, 0x03, # Usage Maximum (3)
+        0x15, 0x00, # Logical Minimum (0)
+        0x25, 0x01, # Logical Maximum (1)
+        0x95, 0x03, # Report Count (3)
+        0x75, 0x01, # Report Size (1)
+        0x81, 0x02, # Input (Data,Var,Abs)
+        0x95, 0x01, # Report Count (1)
+        0x75, 0x05, # Report Size (5)
+        0x81, 0x03, # Input (Cnst,Var,Abs) - padding
 
-      # X and Y movement (relative)
-      0x05, 0x01, # Usage Page (Generic Desktop)
-      0x09, 0x30, # Usage (X)
-      0x09, 0x31, # Usage (Y)
-      0x15, 0x81, # Logical Minimum (-127)
-      0x25, 0x7f, # Logical Maximum (127)
-      0x75, 0x08, # Report Size (8)
-      0x95, 0x02, # Report Count (2)
-      0x81, 0x06, # Input (Data,Var,Rel)
+        # X and Y movement (relative)
+        0x05, 0x01, # Usage Page (Generic Desktop)
+        0x09, 0x30, # Usage (X)
+        0x09, 0x31, # Usage (Y)
+        0x15, 0x81, # Logical Minimum (-127)
+        0x25, 0x7f, # Logical Maximum (127)
+        0x75, 0x08, # Report Size (8)
+        0x95, 0x02, # Report Count (2)
+        0x81, 0x06, # Input (Data,Var,Rel)
 
-      # Wheel (optional, but helps compatibility)
-      0x09, 0x38, # Usage (Wheel)
-      0x15, 0x81, # Logical Minimum (-127)
-      0x25, 0x7f, # Logical Maximum (127)
-      0x75, 0x08, # Report Size (8)
-      0x95, 0x01, # Report Count (1)
-      0x81, 0x06, # Input (Data,Var,Rel)
+        # Wheel (optional, but helps compatibility)
+        0x09, 0x38, # Usage (Wheel)
+        0x15, 0x81, # Logical Minimum (-127)
+        0x25, 0x7f, # Logical Maximum (127)
+        0x75, 0x08, # Report Size (8)
+        0x95, 0x01, # Report Count (1)
+        0x81, 0x06, # Input (Data,Var,Rel)
 
-      0xc0, # End Collection
-      0xc0, # End Collection
-    ]
-    File.open("#{base}/functions/hid.mouse/report_desc", "wb") { |outf| outf.write(mouse_desc) }
+        0xc0, # End Collection
+        0xc0, # End Collection
+      ]
+      File.open("#{base}/functions/hid.mouse/report_desc", "wb") { |outf| outf.write(mouse_desc) }
 
-    # Configure absolute mouse function
-    File.write "#{base}/functions/hid.mouse_absolute/protocol", "2" # Mouse protocol
-    File.write "#{base}/functions/hid.mouse_absolute/subclass", "1"
-    File.write "#{base}/functions/hid.mouse_absolute/report_length", "5" # 5 bytes: buttons + X + Y (16-bit each)
+      # Configure absolute mouse function
+      File.write "#{base}/functions/hid.mouse_absolute/protocol", "2" # Mouse protocol
+      File.write "#{base}/functions/hid.mouse_absolute/subclass", "1"
+      File.write "#{base}/functions/hid.mouse_absolute/report_length", "5" # 5 bytes: buttons + X + Y (16-bit each)
 
-    # HID report descriptor for absolute mouse (buttons + 16-bit absolute X/Y)
-    mouse_abs_desc = Bytes[
-      0x05, 0x01,       # Usage Page (Generic Desktop)
-      0x09, 0x02,       # Usage (Mouse)
-      0xA1, 0x01,       # Collection (Application)
-      0x09, 0x01,       #   Usage (Pointer)
-      0xA1, 0x00,       #   Collection (Physical)
-      0x05, 0x09,       #     Usage Page (Button)
-      0x19, 0x01,       #     Usage Minimum (Button 1)
-      0x29, 0x03,       #     Usage Maximum (Button 3)
-      0x15, 0x00,       #     Logical Minimum (0)
-      0x25, 0x01,       #     Logical Maximum (1)
-      0x95, 0x03,       #     Report Count (3)
-      0x75, 0x01,       #     Report Size (1)
-      0x81, 0x02,       #     Input (Data,Var,Abs)
-      0x95, 0x01,       #     Report Count (1)
-      0x75, 0x05,       #     Report Size (5)
-      0x81, 0x03,       #     Input (Cnst,Var,Abs) - padding
-      0x05, 0x01,       #     Usage Page (Generic Desktop)
-      0x09, 0x30,       #     Usage (X)
-      0x09, 0x31,       #     Usage (Y)
-      0x16, 0x00, 0x00, #     Logical Minimum (0)
-      0x26, 0xFF, 0x7F, #     Logical Maximum (32767)
-      0x75, 0x10,       #     Report Size (16)
-      0x95, 0x02,       #     Report Count (2)
-      0x81, 0x02,       #     Input (Data,Var,Abs)
-      0xC0,             #   End Collection
-      0xC0              # End Collection
-    ]
-    File.open("#{base}/functions/hid.mouse_absolute/report_desc", "wb") { |outf| outf.write(mouse_abs_desc) }
+      # HID report descriptor for absolute mouse (buttons + 16-bit absolute X/Y)
+      mouse_abs_desc = Bytes[
+        0x05, 0x01,       # Usage Page (Generic Desktop)
+        0x09, 0x02,       # Usage (Mouse)
+        0xA1, 0x01,       # Collection (Application)
+        0x09, 0x01,       #   Usage (Pointer)
+        0xA1, 0x00,       #   Collection (Physical)
+        0x05, 0x09,       #     Usage Page (Button)
+        0x19, 0x01,       #     Usage Minimum (Button 1)
+        0x29, 0x03,       #     Usage Maximum (Button 3)
+        0x15, 0x00,       #     Logical Minimum (0)
+        0x25, 0x01,       #     Logical Maximum (1)
+        0x95, 0x03,       #     Report Count (3)
+        0x75, 0x01,       #     Report Size (1)
+        0x81, 0x02,       #     Input (Data,Var,Abs)
+        0x95, 0x01,       #     Report Count (1)
+        0x75, 0x05,       #     Report Size (5)
+        0x81, 0x03,       #     Input (Cnst,Var,Abs) - padding
+        0x05, 0x01,       #     Usage Page (Generic Desktop)
+        0x09, 0x30,       #     Usage (X)
+        0x09, 0x31,       #     Usage (Y)
+        0x16, 0x00, 0x00, #     Logical Minimum (0)
+        0x26, 0xFF, 0x7F, #     Logical Maximum (32767)
+        0x75, 0x10,       #     Report Size (16)
+        0x95, 0x02,       #     Report Count (2)
+        0x81, 0x02,       #     Input (Data,Var,Abs)
+        0xC0,             #   End Collection
+        0xC0              # End Collection
+      ]
+      File.open("#{base}/functions/hid.mouse_absolute/report_desc", "wb") { |outf| outf.write(mouse_abs_desc) }
+    end
 
     # Configure mass storage function BEFORE creating symlinks
     mass_storage_enabled = false
@@ -329,27 +338,33 @@ module HIDComposite
       end
     end
 
-    # Create symlinks for both functions
+    # Create symlinks for enabled functions
 
+    # Always create keyboard symlink
     keyboard_dest = "#{base}/configs/c.1/hid.keyboard"
     unless File.exists?(keyboard_dest) || File.symlink?(keyboard_dest)
       FileUtils.ln_s "#{base}/functions/hid.keyboard", keyboard_dest
     end
 
-    mouse_dest = "#{base}/configs/c.1/hid.mouse"
-    unless File.exists?(mouse_dest) || File.symlink?(mouse_dest)
-      FileUtils.ln_s "#{base}/functions/hid.mouse", mouse_dest
+    # Create mouse symlinks if enabled
+    if enable_mouse
+      mouse_dest = "#{base}/configs/c.1/hid.mouse"
+      unless File.exists?(mouse_dest) || File.symlink?(mouse_dest)
+        FileUtils.ln_s "#{base}/functions/hid.mouse", mouse_dest
+      end
+
+      mouse_abs_dest = "#{base}/configs/c.1/hid.mouse_absolute"
+      unless File.exists?(mouse_abs_dest) || File.symlink?(mouse_abs_dest)
+        FileUtils.ln_s "#{base}/functions/hid.mouse_absolute", mouse_abs_dest
+      end
     end
 
-    mouse_abs_dest = "#{base}/configs/c.1/hid.mouse_absolute"
-    unless File.exists?(mouse_abs_dest) || File.symlink?(mouse_abs_dest)
-      FileUtils.ln_s "#{base}/functions/hid.mouse_absolute", mouse_abs_dest
-    end
-
-    # Always create ECM symlink
-    ecm_dest = "#{base}/configs/c.1/ecm.usb0"
-    unless File.exists?(ecm_dest) || File.symlink?(ecm_dest)
-      FileUtils.ln_s "#{base}/functions/ecm.usb0", ecm_dest
+    # Create ECM symlink if enabled
+    if enable_ecm
+      ecm_dest = "#{base}/configs/c.1/ecm.usb0"
+      unless File.exists?(ecm_dest) || File.symlink?(ecm_dest)
+        FileUtils.ln_s "#{base}/functions/ecm.usb0", ecm_dest
+      end
     end
 
     # Create mass storage symlink if it was successfully configured
@@ -403,18 +418,25 @@ module HIDComposite
       # Check what hidg devices exist
       hidg_devices = Dir.glob("/dev/hidg*").sort
 
-      if hidg_devices.size >= 3
-        # Take the last three devices (most recently created)
-        keyboard_device = hidg_devices[-3]
-        mouse_device = hidg_devices[-2]
-        mouse_abs_device = hidg_devices[-1]
-        Log.debug { "Found HID devices: keyboard=#{keyboard_device}, mouse=#{mouse_device}, mouse_absolute=#{mouse_abs_device}" }
+      expected_devices = enable_mouse ? 3 : 1
+      if hidg_devices.size >= expected_devices
+        # Always take the first device as keyboard
+        keyboard_device = hidg_devices[0]
+
+        if enable_mouse && hidg_devices.size >= 3
+          # Take the next two devices for mouse
+          mouse_device = hidg_devices[1]
+          mouse_abs_device = hidg_devices[2]
+          Log.debug { "Found HID devices: keyboard=#{keyboard_device}, mouse=#{mouse_device}, mouse_absolute=#{mouse_abs_device}" }
+        else
+          Log.debug { "Found HID device: keyboard=#{keyboard_device}" }
+        end
         break
       end
 
       if attempt == 10
         Log.debug { "Available hidg devices after timeout: #{hidg_devices}" }
-        raise "Not enough HID devices created. Expected 3, found #{hidg_devices.size}. Available: #{hidg_devices}"
+        raise "Not enough HID devices created. Expected #{expected_devices}, found #{hidg_devices.size}. Available: #{hidg_devices}"
       end
     end
 
@@ -427,7 +449,14 @@ module HIDComposite
       enable_ecm_interface
     end
 
-    {keyboard: keyboard_device, mouse: mouse_device, mouse_absolute: mouse_abs_device, ethernet: "/dev/usb0", ethernet_ifname: @@ethernet_ifname, dnsmasq_pid: nil}
+    {
+      keyboard:        keyboard_device,
+      mouse:           enable_mouse ? mouse_device : nil,
+      mouse_absolute:  enable_mouse ? mouse_abs_device : nil,
+      ethernet:        enable_ecm ? "/dev/usb0" : nil,
+      ethernet_ifname: @@ethernet_ifname,
+      dnsmasq_pid:     nil,
+    }
   end
 
   # Bring up ECM/usb0 and start dnsmasq (idempotent)

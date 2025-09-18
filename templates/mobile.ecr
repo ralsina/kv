@@ -71,7 +71,7 @@
             <button onclick="pasteFromClipboard()" title="Paste from your clipboard"><span class="material-icons" style="font-size: 0.8em;">content_paste</span> Paste</button>
           </div>
         </details>
-        <details id="section-mouse">
+        <details id="section-mouse" style="display: none;">
           <summary><span class="material-icons">mouse</span> Mouse Buttons</summary>
           <div>
             <button onclick="sendMouseClick('left')">L Click</button>
@@ -79,7 +79,7 @@
             <button onclick="sendMouseClick('middle')">M Click</button>
           </div>
         </details>
-        <details id="section-usb">
+        <details id="section-usb" style="display: none;">
           <summary><span class="material-icons">usb</span> Virtual USB Drive</summary>
           <div id="usb-image-list">
             Loading disk images...
@@ -92,7 +92,7 @@
           </form>
           <div id="usb-upload-status"></div>
         </details>
-        <details id="section-network">
+        <details id="section-network" style="display: none;">
           <summary><span class="material-icons">cable</span> Network (ECM)</summary>
           <div>
             <label style="display:flex;align-items:center;gap:0.5em;">

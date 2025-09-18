@@ -167,25 +167,31 @@ class KVMManagerV4cr
   @keyboard_enabled = false
   @mouse_enabled = false
   @ecm_enabled : Bool
+  @disable_mouse : Bool
+  @disable_ethernet : Bool
+  @disable_mass_storage : Bool
   @video_device : String
   @audio_device : String
   @keyboard_device : String = ""
-  @mouse_device : String = ""          # Relative mouse
-  @mouse_device_absolute : String = "" # Absolute mouse
+  @mouse_device : String? = nil          # Relative mouse
+  @mouse_device_absolute : String? = nil # Absolute mouse
   @width : UInt32
   @height : UInt32
   @fps : Int32
   @pressed_buttons = Set(String).new
   @pressed_keys = Set(String).new
-  @mass_storage : MassStorageManager
+  @mass_storage : MassStorageManager?
   @video_capture : V4crVideoCapture
   @video_jpeg_quality : Int32 = 100
   @detected_qualities : Array(String)
   @audio_streamer : AudioStreamer
 
-  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, @video_jpeg_quality = 100, ecm_enabled = false)
-    @ecm_enabled = ecm_enabled
-    @mass_storage = MassStorageManager.new
+  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, @video_jpeg_quality = 100, ecm_enabled = false, disable_mouse = false, disable_ethernet = false, disable_mass_storage = false)
+    @ecm_enabled = ecm_enabled && !disable_ethernet
+    @disable_mouse = disable_mouse
+    @disable_ethernet = disable_ethernet
+    @disable_mass_storage = disable_mass_storage
+    @mass_storage = disable_mass_storage ? nil : MassStorageManager.new
     @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
     @audio_streamer = AudioStreamer.new(@audio_device)
 
@@ -224,10 +230,13 @@ class KVMManagerV4cr
   end
 
   def setup_hid_devices
-    storage_file = @mass_storage.selected_image
-    enable_mass_storage = !!storage_file
+    storage_file = @disable_mass_storage ? nil : @mass_storage.try(&.selected_image)
+    enable_mass_storage = !@disable_mass_storage && !!storage_file
+    enable_mouse = !@disable_mouse
+
     # Build status string for logging
-    status_str = "Setting up USB HID composite gadget (keyboard + mouse"
+    status_str = "Setting up USB HID composite gadget (keyboard"
+    status_str += " + mouse" if enable_mouse
     status_str += " + mass storage" if enable_mass_storage
     status_str += " + ECM/ethernet" if @ecm_enabled
     status_str += ")..."
@@ -237,23 +246,28 @@ class KVMManagerV4cr
     devices = HIDComposite.setup_usb_composite_gadget(
       enable_mass_storage: enable_mass_storage,
       storage_file: storage_file,
-      enable_ecm: @ecm_enabled
+      enable_ecm: @ecm_enabled,
+      enable_mouse: enable_mouse
     )
 
     @keyboard_device = devices[:keyboard]
-    @mouse_device = devices[:mouse]
-    @mouse_device_absolute = devices[:mouse_absolute]
+    @mouse_device = devices[:mouse]?
+    @mouse_device_absolute = devices[:mouse_absolute]?
     @keyboard_enabled = File.exists?(@keyboard_device)
-    @mouse_enabled = File.exists?(@mouse_device)
+    @mouse_enabled = enable_mouse && (mouse_device = @mouse_device) && File.exists?(mouse_device)
 
     Log.info { "HID keyboard ready: #{@keyboard_device}" }
-    Log.info { "HID mouse (relative) ready: #{@mouse_device}" }
-    Log.info { "HID mouse (absolute) ready: #{@mouse_device_absolute}" }
+    if enable_mouse
+      Log.info { "HID mouse (relative) ready: #{@mouse_device}" }
+      Log.info { "HID mouse (absolute) ready: #{@mouse_device_absolute}" }
+    else
+      Log.info { "HID mouse disabled by command line option" }
+    end
 
     if enable_mass_storage
       Log.info { "USB mass storage ready: #{storage_file}" }
     else
-      Log.info { "No USB mass storage image attached (detached)" }
+      Log.info { "USB mass storage disabled by command line option" }
     end
   rescue ex
     Log.error { "Failed to setup HID composite gadget: #{ex.message}" }
@@ -309,6 +323,23 @@ class KVMManagerV4cr
 
   def mouse_enabled?
     @mouse_enabled
+  end
+
+  def mouse_disabled?
+    @disable_mouse
+  end
+
+  def ethernet_disabled?
+    @disable_ethernet
+  end
+
+  def mass_storage_disabled?
+    @disable_mass_storage
+  end
+
+  # Safely get mass storage manager for API access
+  def mass_storage_manager
+    @mass_storage
   end
 
   def send_keys(keys : Array(String), modifiers : Array(String) = [] of String)
@@ -374,7 +405,9 @@ class KVMManagerV4cr
         Log.info { "Releasing stuck mouse buttons (#{@pressed_buttons.size} buttons)" }
         @pressed_buttons.clear
         # Send empty mouse report
-        HIDMouse.send_mouse_move_with_buttons(@mouse_device, 0, 0, [] of String)
+        if mouse_device = @mouse_device
+          HIDMouse.send_mouse_move_with_buttons(mouse_device, 0, 0, [] of String)
+        end
       end
 
       {success: true, message: "Released #{released_keys} keys and #{@pressed_buttons.size} mouse buttons"}
@@ -389,8 +422,12 @@ class KVMManagerV4cr
     return {success: false, message: "No mouse device"} unless @mouse_device
 
     begin
-      HIDMouse.send_mouse_click(@mouse_device, button)
-      {success: true, message: "Mouse click sent: #{button}"}
+      if mouse_device = @mouse_device
+        HIDMouse.send_mouse_click(mouse_device, button)
+        {success: true, message: "Mouse click sent: #{button}"}
+      else
+        {success: false, message: "Mouse device not available"}
+      end
     rescue ex
       Log.error { "Failed to send mouse click: #{ex.message}" }
       {success: false, message: "Error sending mouse click: #{ex.message}"}
@@ -403,8 +440,12 @@ class KVMManagerV4cr
 
     begin
       # Send movement with current button state preserved
-      HIDMouse.send_mouse_move_with_buttons(@mouse_device, x, y, @pressed_buttons.to_a)
-      {success: true, message: "Mouse move sent: #{x}, #{y} with buttons: #{@pressed_buttons.to_a}"}
+      if mouse_device = @mouse_device
+        HIDMouse.send_mouse_move_with_buttons(mouse_device, x, y, @pressed_buttons.to_a)
+        {success: true, message: "Mouse move sent: #{x}, #{y} with buttons: #{@pressed_buttons.to_a}"}
+      else
+        {success: false, message: "Mouse device not available"}
+      end
     rescue ex
       Log.error { "Failed to send mouse move: #{ex.message}" }
       {success: false, message: "Error sending mouse move: #{ex.message}"}
@@ -417,8 +458,12 @@ class KVMManagerV4cr
 
     begin
       @pressed_buttons.add(button) # Track pressed button
-      HIDMouse.send_mouse_press(@mouse_device, button)
-      {success: true, message: "Mouse press sent: #{button}"}
+      if mouse_device = @mouse_device
+        HIDMouse.send_mouse_press(mouse_device, button)
+        {success: true, message: "Mouse press sent: #{button}"}
+      else
+        {success: false, message: "Mouse device not available"}
+      end
     rescue ex
       Log.error { "Failed to send mouse press: #{ex.message}" }
       {success: false, message: "Error sending mouse press: #{ex.message}"}
@@ -431,8 +476,12 @@ class KVMManagerV4cr
 
     begin
       @pressed_buttons.delete(button) # Remove from pressed buttons
-      HIDMouse.send_mouse_release(@mouse_device, button)
-      {success: true, message: "Mouse release sent: #{button}"}
+      if mouse_device = @mouse_device
+        HIDMouse.send_mouse_release(mouse_device, button)
+        {success: true, message: "Mouse release sent: #{button}"}
+      else
+        {success: false, message: "Mouse device not available"}
+      end
     rescue ex
       Log.error { "Failed to send mouse release: #{ex.message}" }
       {success: false, message: "Error sending mouse release: #{ex.message}"}
@@ -444,8 +493,12 @@ class KVMManagerV4cr
     return {success: false, message: "No mouse device"} unless @mouse_device
 
     begin
-      HIDMouse.send_mouse_wheel(@mouse_device, wheel_delta)
-      {success: true, message: "Mouse wheel sent: #{wheel_delta}"}
+      if mouse_device = @mouse_device
+        HIDMouse.send_mouse_wheel(mouse_device, wheel_delta)
+        {success: true, message: "Mouse wheel sent: #{wheel_delta}"}
+      else
+        {success: false, message: "Mouse device not available"}
+      end
     rescue ex
       Log.error { "Failed to send mouse wheel: #{ex.message}" }
       {success: false, message: "Error sending mouse wheel: #{ex.message}"}
@@ -458,8 +511,12 @@ class KVMManagerV4cr
 
     begin
       # Send movement with explicit button state (used for drag operations)
-      HIDMouse.send_mouse_move_with_buttons(@mouse_device, x, y, buttons)
-      {success: true, message: "Mouse move sent: #{x}, #{y} with explicit buttons: #{buttons}"}
+      if mouse_device = @mouse_device
+        HIDMouse.send_mouse_move_with_buttons(mouse_device, x, y, buttons)
+        {success: true, message: "Mouse move sent: #{x}, #{y} with explicit buttons: #{buttons}"}
+      else
+        {success: false, message: "Mouse device not available"}
+      end
     rescue ex
       Log.error { "Failed to send mouse move with buttons: #{ex.message}" }
       {success: false, message: "Error sending mouse move with buttons: #{ex.message}"}
@@ -468,15 +525,16 @@ class KVMManagerV4cr
 
   # Send absolute mouse move (for absolute pointer device)
   def send_mouse_absolute_move(x : Int32, y : Int32, buttons : Array(String) = [] of String)
-    if @mouse_device_absolute.nil? || @mouse_device_absolute.empty?
-      return {success: false, message: "Absolute mouse not available"}
-    end
-    begin
-      HIDMouse.send_mouse_absolute_move(@mouse_device_absolute, x, y, buttons)
-      {success: true, message: "Absolute mouse move sent: #{x}, #{y} with buttons: #{buttons}"}
-    rescue ex
-      Log.error { "Failed to send absolute mouse move: #{ex.message}" }
-      {success: false, message: "Error sending absolute mouse move: #{ex.message}"}
+    if mouse_device_absolute = @mouse_device_absolute
+      begin
+        HIDMouse.send_mouse_absolute_move(mouse_device_absolute, x, y, buttons)
+        {success: true, message: "Absolute mouse move sent: #{x}, #{y} with buttons: #{buttons}"}
+      rescue ex
+        Log.error { "Failed to send absolute mouse move: #{ex.message}" }
+        {success: false, message: "Error sending absolute mouse move: #{ex.message}"}
+      end
+    else
+      {success: false, message: "Absolute mouse not available"}
     end
   end
 
@@ -548,7 +606,13 @@ class KVMManagerV4cr
     }
 
     # Use actual mass storage status from the system
-    storage_status = @mass_storage.actual_status
+    storage_status = if @disable_mass_storage
+                       {attached: false, image: nil, readonly: false}
+                     elsif mass_storage = @mass_storage
+                       mass_storage.actual_status
+                     else
+                       {attached: false, image: nil, readonly: false}
+                     end
 
     # Use actual ECM/ethernet status from the system
     ecm_status = HIDComposite.ecm_actual_status
@@ -559,6 +623,11 @@ class KVMManagerV4cr
       mouse:    mouse_status,
       storage:  storage_status,
       ecm:      ecm_status,
+      disabled: {
+        mouse:        @disable_mouse,
+        ethernet:     @disable_ethernet,
+        mass_storage: @disable_mass_storage,
+      },
     }
   end
 
@@ -569,7 +638,7 @@ class KVMManagerV4cr
     Log.info { "Shutting down and cleaning up KVM resources..." }
     stop_video_stream
     stop_audio_stream
-    @mass_storage.cleanup
+    @mass_storage.try(&.cleanup)
     HIDComposite.cleanup_all_gadgets
     Log.info { "KVM shutdown cleanup complete." }
   end

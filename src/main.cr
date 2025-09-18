@@ -51,14 +51,23 @@ module Main
         -q QUALITY, --quality=QUALITY      Video JPEG quality (1-100) [default: 100]
         -p PORT, --port=PORT               HTTP server port [default: 3000]
         -b ADDRESS, --bind=ADDRESS         Address to bind to [default: 0.0.0.0]
+        --disable-mouse                   Disable USB mouse gadget
+        --disable-ethernet                 Disable USB ethernet gadget
+        --disable-mass-storage             Disable USB mass storage gadget
         --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
         -h, --help                         Show this help
+
+      Environment Variables:
+        LOG_LEVEL                          Log level (debug, info, warn, error, fatal) [default: info]
+        KV_USER                            Username for basic authentication
+        KV_PASSWORD                        Password for basic authentication
 
       Examples:
         sudo ./bin/kv                          # Auto-detect video device, 1080p@30fps
         sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps
         sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution
         sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080
+        LOG_LEVEL=debug sudo ./bin/kv          # Enable debug logging
       USAGE
 
     args = Docopt.docopt(usage, ARGV, version: VERSION)
@@ -154,12 +163,31 @@ module Main
       end
     end
 
+    # Extract disable flags
+    disable_mouse = false
+    disable_ethernet = false
+    disable_mass_storage = false
+    disable_mouse = true if args["--disable-mouse"]
+    disable_ethernet = true if args["--disable-ethernet"]
+    disable_mass_storage = true if args["--disable-mass-storage"]
+
     # Create and set the global KVM manager instance
-    kvm_manager = KVMManagerV4cr.new(video_device, audio_device, width, height, fps, jpeg_quality)
+    kvm_manager = KVMManagerV4cr.new(
+      video_device,
+      audio_device,
+      width,
+      height,
+      fps,
+      jpeg_quality,
+      disable_mouse: disable_mouse,
+      disable_ethernet: disable_ethernet,
+      disable_mass_storage: disable_mass_storage
+    )
     GlobalKVM.manager = kvm_manager
 
     # Configure and start AntiIdle service
-    anti_idle_enabled = args.includes? "--anti-idle"
+    anti_idle_enabled = false
+    anti_idle_enabled = true if args["--anti-idle"]
     if anti_idle_enabled
       interval = 1
       AntiIdle.configure(enabled: true, interval: interval.seconds)
@@ -181,7 +209,9 @@ module Main
     Log.info { "🌐 Web interface: http://localhost:#{port}" }
     Log.info { "📡 MJPEG stream: http://localhost:#{port}/video.mjpg" }
     Log.info { "⌨️  HID keyboard: #{kvm_manager.keyboard_enabled? ? "✅ Ready" : "❌ Disabled"}" }
-    Log.info { "🖱️  HID mouse: #{kvm_manager.mouse_enabled? ? "✅ Ready" : "❌ Disabled"}" }
+    Log.info { "🖱️  HID mouse: #{kvm_manager.mouse_disabled? ? "❌ Disabled by command line" : (kvm_manager.mouse_enabled? ? "✅ Ready" : "❌ Failed to initialize")}" }
+    Log.info { "🔌 Ethernet gadget: #{kvm_manager.ethernet_disabled? ? "❌ Disabled by command line" : (kvm_manager.ecm_status[:enabled] ? "✅ Ready" : "❌ Failed to initialize")}" }
+    Log.info { "💾 Mass storage gadget: #{kvm_manager.mass_storage_disabled? ? "❌ Disabled by command line" : (kvm_manager.status[:storage][:attached] ? "✅ Ready" : "⏸️ Idle (no image selected)")}" }
     Log.info { "⚡ Architecture: Direct V4cr MJPEG + USB HID" }
     Log.info { "🎯 Target latency: <50ms" }
     Log.info { "" }
@@ -204,7 +234,22 @@ module Main
     before_all do |env|
       env.response.headers.add("Access-Control-Allow-Origin", "*")
     end
-    ::Log.setup("*", :info)
+    # Configure log level based on environment variable
+    log_level = ENV.fetch("LOG_LEVEL", "info").downcase
+    case log_level
+    when "debug"
+      ::Log.setup("*", :debug)
+    when "info"
+      ::Log.setup("*", :info)
+    when "warn"
+      ::Log.setup("*", :warn)
+    when "error"
+      ::Log.setup("*", :error)
+    when "fatal"
+      ::Log.setup("*", :fatal)
+    else
+      ::Log.setup("*", :info)
+    end
     ::Log.setup("kemal.*", :notice)
     Kemal.config.host_binding = bind_address
     ARGV.clear

@@ -5,17 +5,34 @@ require "mime/multipart"
 get "/api/storage/images" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.manager
-  images = manager.@mass_storage.available_images.map do |img|
-    File.basename(img)
+
+  if manager.mass_storage_disabled?
+    env.response.status_code = 403
+    next({success: false, message: "Mass storage is disabled"}.to_json)
   end
-  selected = manager.@mass_storage.selected_image
-  selected = File.basename(selected) if selected
-  {success: true, images: images, selected: selected}.to_json
+
+  if mass_storage = manager.mass_storage_manager
+    images = mass_storage.available_images.map do |img|
+      File.basename(img)
+    end
+    selected = mass_storage.selected_image
+    selected = File.basename(selected) if selected
+    {success: true, images: images, selected: selected}.to_json
+  else
+    env.response.status_code = 500
+    {success: false, message: "Mass storage manager not available"}.to_json
+  end
 end
 
 post "/api/storage/select" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.manager
+
+  if manager.mass_storage_disabled?
+    env.response.status_code = 403
+    next({success: false, message: "Mass storage is disabled"}.to_json)
+  end
+
   begin
     body = JSON.parse((env.request.body.try &.gets_to_end).to_s)
     image = body["image"]?
@@ -31,7 +48,11 @@ post "/api/storage/select" do |env|
       next({success: false, message: decompress_result[:message]}.to_json)
     end
     selected_img = decompress_result[:raw_image]
-    result = manager.@mass_storage.select_image(selected_img)
+    if mass_storage = manager.mass_storage_manager
+      result = mass_storage.select_image(selected_img)
+    else
+      next({success: false, message: "Mass storage manager not available"}.to_json)
+    end
     # Re-setup HID devices to apply new image
     manager.setup_hid_devices
     result.to_json
@@ -42,6 +63,13 @@ end
 
 post "/api/storage/upload" do |env|
   env.response.content_type = "application/json"
+  manager = GlobalKVM.manager
+
+  if manager.mass_storage_disabled?
+    env.response.status_code = 403
+    next({success: false, message: "Mass storage is disabled"}.to_json)
+  end
+
   begin
     # Get the uploaded file from the form field named "file"
     upload = env.params.files["file"]?
@@ -71,13 +99,24 @@ end
 delete "/api/storage/images/:filename" do |env|
   env.response.content_type = "application/json"
   manager = GlobalKVM.manager
+
+  if manager.mass_storage_disabled?
+    env.response.status_code = 403
+    next({success: false, message: "Mass storage is disabled"}.to_json)
+  end
+
   filename = env.params.url["filename"]
   if filename.nil? || filename.strip.empty?
     env.response.status_code = 400
     next({success: false, message: "Filename not provided"}.to_json)
   end
 
-  result = manager.@mass_storage.delete_image(filename)
+  if mass_storage = manager.mass_storage_manager
+    result = mass_storage.delete_image(filename)
+  else
+    env.response.status_code = 500
+    next({success: false, message: "Mass storage manager not available"}.to_json)
+  end
   if result[:success]
     {success: true, message: result[:message]}.to_json
   else

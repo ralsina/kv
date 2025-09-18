@@ -242,6 +242,43 @@ window.setEthernet = (enable) => window.apiFetch(`/api/ethernet/${enable ? 'enab
 // --- Status Update ---
 window.updateStatus = function () {
   window.apiFetch('/api/status', {}, (data) => {
+    // Handle disabled features
+    if (data.disabled) {
+      // Show/hide USB storage section
+      const usbSection = document.getElementById('section-usb')
+      if (usbSection) {
+        usbSection.style.display = data.disabled.mass_storage ? 'none' : ''
+      }
+
+      // Show/hide ethernet controls
+      const ethernetControl = document.getElementById('ethernet-control')
+      if (ethernetControl) {
+        ethernetControl.style.display = data.disabled.ethernet ? 'none' : ''
+      }
+
+      // Show/hide network section in mobile
+      const networkSection = document.getElementById('section-network')
+      if (networkSection) {
+        networkSection.style.display = data.disabled.ethernet ? 'none' : ''
+      }
+
+      // Show/hide mouse section in mobile
+      const mouseSection = document.getElementById('section-mouse')
+      if (mouseSection) {
+        mouseSection.style.display = data.disabled.mouse ? 'none' : ''
+      }
+
+      // Disable mouse events if mouse is disabled
+      if (data.disabled.mouse) {
+        window.sendMouseClick = () => {}
+        window.sendMousePress = () => {}
+        window.sendMouseRelease = () => {}
+        window.sendMouseWheel = () => {}
+        window.sendMouseMove = () => {}
+        window.sendMouseAbsoluteMove = () => {}
+      }
+    }
+
     // Video Status (Desktop only)
     const videoStatus = document.getElementById('video-status')
     if (videoStatus) {

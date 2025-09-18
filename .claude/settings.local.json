@@ -8,7 +8,8 @@
       "Bash(./bin/kv:*)",
       "Bash(git checkout:*)",
       "Bash(git add:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(./build_static.sh)"
     ],
     "deny": [],
     "ask": []
