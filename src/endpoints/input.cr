@@ -36,6 +36,14 @@ ws "/ws/input" do |socket|
 
   Log.debug { "WebSocket client connected" }
 
+  # Check if mouse is disabled and send warning
+  if manager.mouse_disabled?
+    socket.send({
+      type:    "warning",
+      message: "Mouse input is disabled",
+    }.to_json)
+  end
+
   # Send initial status
   status = manager.status
   socket.send({
@@ -63,6 +71,10 @@ ws "/ws/input" do |socket|
 
       case event_type
       when "mouse_move"
+        if manager.mouse_disabled?
+          send_error.call("Mouse input is disabled")
+          next
+        end
         x_delta = data["x"]?.try(&.as_i) || 0
         y_delta = data["y"]?.try(&.as_i) || 0
         buttons_json = data["buttons"]?
@@ -70,24 +82,40 @@ ws "/ws/input" do |socket|
         result = buttons.empty? ? manager.send_mouse_move(x_delta, y_delta) : manager.send_mouse_move_with_buttons(x_delta, y_delta, buttons)
         handle_result.call(result)
       when "mouse_click"
+        if manager.mouse_disabled?
+          send_error.call("Mouse input is disabled")
+          next
+        end
         button = data["button"]?.try(&.as_s)
         if button
           result = manager.send_mouse_click(button)
           socket.send({type: "mouse_click_result", success: result[:success], button: button}.to_json)
         end
       when "mouse_press"
+        if manager.mouse_disabled?
+          send_error.call("Mouse input is disabled")
+          next
+        end
         button = data["button"]?.try(&.as_s)
         if button
           result = manager.send_mouse_press(button)
           handle_result.call(result)
         end
       when "mouse_release"
+        if manager.mouse_disabled?
+          send_error.call("Mouse input is disabled")
+          next
+        end
         button = data["button"]?.try(&.as_s)
         if button
           result = manager.send_mouse_release(button)
           handle_result.call(result)
         end
       when "mouse_wheel"
+        if manager.mouse_disabled?
+          send_error.call("Mouse input is disabled")
+          next
+        end
         wheel_delta = data["delta"]?.try(&.as_i) || 0
         if wheel_delta != 0
           result = manager.send_mouse_wheel(wheel_delta)
@@ -118,6 +146,10 @@ ws "/ws/input" do |socket|
       when "ping"
         socket.send({type: "pong"}.to_json)
       when "mouse_absolute"
+        if manager.mouse_disabled?
+          send_error.call("Mouse input is disabled")
+          next
+        end
         x = data["x"]?.try(&.as_i) || 0
         y = data["y"]?.try(&.as_i) || 0
         buttons_json = data["buttons"]?

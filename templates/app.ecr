@@ -84,7 +84,7 @@
                 </div>
             </details>
 
-            <details id="section-usb"><summary><span class="material-icons">usb</span> Virtual USB Drive</summary>
+            <details id="section-usb" style="display: none;"><summary><span class="material-icons">usb</span> Virtual USB Drive</summary>
                 <div class="compact-section">
                     <div id="usb-image-list" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.1); padding: 0.5rem; border-radius: var(--pico-border-radius); font-family: monospace; font-size: 0.9rem;">
                         Loading disk images...
@@ -101,7 +101,7 @@
                 </div>
             </details>
 
-            <div style="margin-bottom:1em;">
+            <div id="ethernet-control" style="margin-bottom:1em; display: none;">
                 <label style="display:flex;align-items:center;gap:0.5em;">
                     <span class="material-icons" id="ethernet-status-icon">cable</span>
                     <span id="ethernet-status-label" style="min-width:4em;">Checking...</span>
