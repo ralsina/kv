@@ -1,3 +1,8 @@
+## [0.11.0] - 2025-09-19
+
+### 🚀 Features
+
+- Add optional USB gadgets support with CLI disable flags
 ## [0.10.0] - 2025-09-16
 
 ### 🚀 Features
@@ -7,6 +12,7 @@
 ### 💼 Other
 
 - Release v0.9.2
+- Release v0.10.0
 
 ### 🧪 Testing
 
