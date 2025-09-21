@@ -258,9 +258,10 @@ class KVMManagerV4cr
       start_video_stream # Start video automatically
     else
       Log.info { "Video streaming not started - no video device available" }
-      # Start hotplug polling if interval > 0
-      start_hotplug_polling if @hotplug_interval > 0.seconds
     end
+
+    # Start hotplug polling if interval > 0
+    start_hotplug_polling if @hotplug_interval > 0.seconds
   end
 
   # Returns the absolute mouse device path
@@ -761,40 +762,43 @@ class KVMManagerV4cr
 
   # Hotplug polling for video devices
   private def start_hotplug_polling
-    return if @hotplug_interval <= 0.seconds || !@video_device.empty?
+    return if @hotplug_interval <= 0.seconds
 
     Log.info { "Starting video device hotplug polling (interval: #{@hotplug_interval.total_seconds}s)" }
     @hotplug_fiber = spawn do
       while @hotplug_fiber
         sleep @hotplug_interval
 
-        # Check if video device is now available
-        if HardwareDetector.video_input_available?
-          detected_device = HardwareDetector.detect_best_video_device(@width, @height)
-          if detected_device
-            Log.info { "Hotplug: Video device detected - #{detected_device}" }
+        # Check current video device status
+        if !@video_device.empty?
+          # We have a device, check if it's still available
+          unless video_device_available?
+            Log.warn { "Hotplug: Video device #{@video_device} removed" }
+            handle_video_device_removal
+          end
+        else
+          # No device, check if one is now available
+          if HardwareDetector.video_input_available?
+            detected_device = HardwareDetector.detect_best_video_device(@width, @height)
+            if detected_device
+              Log.info { "Hotplug: Video device detected - #{detected_device}" }
 
-            # Initialize video capture with the new device
-            @video_device = detected_device
-            @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
-            @audio_streamer = AudioStreamer.new(@audio_device)
+              # Initialize video capture with the new device
+              @video_device = detected_device
+              @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
+              @audio_streamer = AudioStreamer.new(@audio_device)
 
-            # Update detected qualities
-            update_detected_qualities
+              # Update detected qualities
+              update_detected_qualities
 
-            # Start video streaming
-            if start_video_stream
-              Log.info { "Hotplug: Video streaming started successfully" }
-
-              # Notify web clients via WebSocket
-              notify_video_device_change(true, detected_device)
-
-              # Stop hotplug polling since we now have a device
-              @hotplug_fiber = nil
-              break
-            else
-              Log.error { "Hotplug: Failed to start video streaming" }
-              @video_device = ""
+              # Start video streaming
+              if start_video_stream
+                Log.info { "Hotplug: Video streaming started successfully" }
+                notify_video_device_change(true, detected_device)
+              else
+                Log.error { "Hotplug: Failed to start video streaming" }
+                @video_device = ""
+              end
             end
           end
         end
@@ -826,6 +830,26 @@ class KVMManagerV4cr
     end
   end
 
+  private def handle_video_device_removal
+    # Stop video streaming
+    stop_video_stream
+
+    # Clear video device
+    @video_device = ""
+
+    # Create dummy video capture
+    @video_capture = V4crVideoCapture.new("", @width, @height, @fps, @video_jpeg_quality)
+    @audio_streamer = AudioStreamer.new("")
+
+    # Clear detected qualities
+    @detected_qualities = [] of String
+
+    # Notify web clients
+    notify_video_device_change(false, "")
+
+    Log.warn { "Video streaming stopped due to device removal" }
+  end
+
   private def notify_video_device_change(available : Bool, device : String)
     # This would typically send a WebSocket message to connected clients
     # For now, just log the change
@@ -839,5 +863,9 @@ class KVMManagerV4cr
 
   def hotplug_active? : Bool
     @hotplug_fiber != nil
+  end
+
+  def video_device_present? : Bool
+    !@video_device.empty? && video_device_available?
   end
 end
