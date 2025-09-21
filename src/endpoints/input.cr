@@ -1,5 +1,6 @@
 # Keyboard and mouse input endpoints, WebSocket input
 require "../kvm_manager"
+require "../websocket_manager"
 
 ##
 # WebSocket endpoint for real-time keyboard and mouse input
@@ -33,8 +34,12 @@ require "../kvm_manager"
 # The server responds with status, error, or mouse_click_result messages as appropriate.
 ws "/ws/input" do |socket|
   manager = GlobalKVM.manager
+  ws_manager = WebSocketManager.instance
 
   Log.debug { "WebSocket client connected" }
+
+  # Register this socket for broadcasting
+  ws_manager.register_socket(socket)
 
   # Check if mouse is disabled and send warning
   if manager.mouse_disabled?
@@ -49,6 +54,16 @@ ws "/ws/input" do |socket|
   socket.send({
     type: "status",
     data: status,
+  }.to_json)
+
+  # Send initial device status
+  socket.send({
+    type:  "device_status",
+    video: {
+      available: manager.video_device_present?,
+      device:    manager.video_device,
+      message:   manager.video_device_present? ? "Video device connected" : "No video device available",
+    },
   }.to_json)
 
   # Helper to send error if needed
@@ -167,6 +182,9 @@ ws "/ws/input" do |socket|
 
   socket.on_close do
     Log.debug { "WebSocket client disconnected" }
+
+    # Unregister socket
+    ws_manager.unregister_socket(socket)
 
     # Release any stuck keys when client disconnects
     begin

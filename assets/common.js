@@ -18,6 +18,56 @@ function showToast (message, type = 'info') {
   }, 3500)
 }
 
+// --- Device Status Handler ---
+function handleDeviceStatus (videoStatus) {
+  const wasAvailable = window.videoDeviceAvailable || false
+  window.videoDeviceAvailable = videoStatus.available
+
+  // Update video element visibility
+  const videoElement = document.getElementById('video-stream') || document.getElementById('videoStream')
+  const noVideoMessage = document.getElementById('no-video')
+  const statusIndicator = document.getElementById('video-status')
+
+  if (videoStatus.available) {
+    // Video device connected
+    if (videoElement) {
+      videoElement.style.display = 'block'
+      // Force reload video stream
+      const currentTime = new Date().getTime()
+      videoElement.src = '/video.mjpg?t=' + currentTime
+    }
+    if (noVideoMessage) {
+      noVideoMessage.style.display = 'none'
+    }
+    if (!wasAvailable) {
+      showToast(videoStatus.message || 'Video device connected', 'success')
+    }
+  } else {
+    // Video device disconnected
+    if (videoElement) {
+      videoElement.style.display = 'none'
+    }
+    if (noVideoMessage) {
+      noVideoMessage.style.display = 'block'
+      noVideoMessage.textContent = videoStatus.message || 'No video device available'
+    }
+    if (wasAvailable) {
+      showToast(videoStatus.message || 'Video device disconnected', 'warning')
+    }
+  }
+
+  // Update status indicator if it exists
+  if (statusIndicator) {
+    statusIndicator.className = videoStatus.available ? 'status-connected' : 'status-disconnected'
+    statusIndicator.title = videoStatus.message || (videoStatus.available ? 'Video device connected' : 'No video device')
+  }
+
+  // Dispatch custom event for other scripts to handle
+  window.dispatchEvent(new CustomEvent('videoDeviceStatusChanged', {
+    detail: videoStatus
+  }))
+}
+
 // --- API Fetch Helper ---
 window.apiFetch = function (endpoint, options = {}, onSuccess, onError) {
   fetch(endpoint, options)
@@ -81,9 +131,27 @@ window.setupInputWebSocket = function () {
   }
 
   wsInput.onmessage = function (ev) {
-    // Optional: Handle status/errors from the server
-    // const msg = JSON.parse(ev.data)
-    // console.log('WS message received:', msg)
+    try {
+      const msg = JSON.parse(ev.data)
+      console.log('WS message received:', msg)
+
+      // Handle device status messages
+      if (msg.type === 'device_status') {
+        handleDeviceStatus(msg.video)
+      }
+      // Handle other message types
+      else if (msg.type === 'warning') {
+        showToast(msg.message, 'warning')
+      }
+      else if (msg.type === 'info') {
+        showToast(msg.message, 'info')
+      }
+      else if (msg.type === 'error') {
+        showToast(msg.message, 'error')
+      }
+    } catch (e) {
+      console.error('Failed to parse WebSocket message:', e)
+    }
   }
 }
 

@@ -4,6 +4,7 @@ require "./composite"
 require "./mass_storage_manager"
 require "./video_capture"
 require "./audio_streamer"
+require "./websocket_manager"
 require "kemal"
 require "file_utils"
 
@@ -851,9 +852,15 @@ class KVMManagerV4cr
   end
 
   private def notify_video_device_change(available : Bool, device : String)
-    # This would typically send a WebSocket message to connected clients
-    # For now, just log the change
-    Log.info { "Video device status changed: available=#{available}, device=#{device}" }
+    # Send WebSocket notification to all connected clients
+    ws_manager = WebSocketManager.instance
+    if available
+      ws_manager.send_device_status(true, device, "Video device connected and streaming")
+      Log.info { "Video device connected: #{device}" }
+    else
+      ws_manager.send_device_status(false, "", "Video device disconnected")
+      Log.warn { "Video device disconnected" }
+    end
   end
 
   def stop_hotplug_polling
