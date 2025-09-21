@@ -8,6 +8,7 @@ require "baked_file_system"
 require "baked_file_handler"
 require "kemal-basic-auth"
 require "./anti_idle"
+require "./hardware_detector"
 
 module Main
   VERSION = {{ `shards version #{__DIR__}/../`.chomp.stringify }}
@@ -27,13 +28,14 @@ module Main
       if $?.success?
         Log.info { "libcomposite module loaded successfully." }
       else
-        Log.error { "Failed to load libcomposite: #{result}" }
-        Log.error { "Please ensure you have the necessary permissions (run as root) and kernel support." }
-        exit 1
+        Log.warn { "Failed to load libcomposite: #{result}" }
+        Log.warn { "USB gadget functionality will not be available" }
+        return false
       end
     else
       Log.info { "libcomposite kernel module is already loaded." }
     end
+    true
   end
 
   def self.main
@@ -55,6 +57,7 @@ module Main
         --disable-ethernet                 Disable USB ethernet gadget
         --disable-mass-storage             Disable USB mass storage gadget
         --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
+        --hotplug-interval=SECONDS         Video device hotplug polling interval [default: 60]
         -h, --help                         Show this help
 
       Environment Variables:
@@ -72,7 +75,18 @@ module Main
 
     args = Docopt.docopt(usage, ARGV, version: VERSION)
 
-    ensure_libcomposite_loaded
+    # Check hardware availability first
+    hw_status = HardwareDetector.hardware_status
+    Log.info { "Hardware detection results:" }
+    Log.info { "  USB OTG: #{hw_status[:otg_available] ? "✅ Available" : "❌ Not available"}" }
+    Log.info { "  Video Input: #{hw_status[:video_available] ? "✅ Available" : "❌ Not available"}" }
+    if hw_status[:best_video_device]
+      Log.info { "  Best video device: #{hw_status[:best_video_device]}" }
+    end
+
+    # Only try to load libcomposite if OTG is available
+    otg_supported = hw_status[:otg_available] && ensure_libcomposite_loaded
+
     KVMManagerV4cr.perform_system_cleanup
 
     # Basic Auth setup
@@ -96,6 +110,7 @@ module Main
     jpeg_quality = args["--quality"]?.try(&.as(String)) || "100"
     port = args["--port"]?.try(&.as(String)) || "3000"
     bind_address = args["--bind"]?.try(&.as(String)) || "0.0.0.0"
+    hotplug_interval = args["--hotplug-interval"]?.try(&.as(String)) || "60"
     auto_detect = video_device.empty? || video_device == "auto-detect"
 
     # Parse resolution
@@ -143,24 +158,46 @@ module Main
       exit 1
     end
 
+    # Parse hotplug interval
+    hotplug_interval = hotplug_interval.to_i
+    if hotplug_interval < 0
+      Log.error { "Invalid hotplug interval. Must be 0 or positive" }
+      exit 1
+    end
+
     # Auto-detect or validate video device
+    video_available = false
     if video_device.empty? || auto_detect
       Log.info { "No video device specified, attempting auto-detection..." }
       detected_device = V4crVideoUtils.find_best_capture_device(width, height)
       if detected_device
         video_device = detected_device.device
+        video_available = true
         Log.info { "Auto-detected video device: #{video_device}" }
       else
-        Log.error { "❌ No suitable video capture device found!" }
-        Log.error { "   Please connect a V4L2-compatible device or specify one with -d /dev/videoX" }
-        exit 1
+        Log.warn { "⚠️  No suitable video capture device found!" }
+        Log.warn { "   Video streaming will not be available" }
+        video_device = "" # Clear the device to indicate no video
       end
     else
       Log.info { "Validating specified video device: #{video_device}" }
-      unless V4crVideoUtils.validate_device(video_device, width, height, fps)
-        Log.error { "❌ Specified device #{video_device} is not valid or not available!" }
-        exit 1
+      if V4crVideoUtils.validate_device(video_device, width, height, fps)
+        video_available = true
+      else
+        Log.warn { "⚠️  Specified device #{video_device} is not valid or not available!" }
+        Log.warn { "   Video streaming will not be available" }
+        video_device = "" # Clear the device to indicate no video
       end
+    end
+
+    # If no video is available initially but hotplug is enabled, we'll poll
+    enable_hotplug = !video_available && hotplug_interval > 0
+
+    # If neither video nor OTG is available and hotplug is disabled, exit
+    if !video_available && !otg_supported && !enable_hotplug
+      Log.error { "❌ Neither video input nor USB OTG is available. Cannot start KVM service." }
+      Log.error { "   Use --hotplug-interval > 0 to enable video device hotplug polling" }
+      exit 1
     end
 
     # Extract disable flags
@@ -179,9 +216,11 @@ module Main
       height,
       fps,
       jpeg_quality,
+      ecm_enabled: false, # Not passed from CLI, will be set based on hardware
       disable_mouse: disable_mouse,
       disable_ethernet: disable_ethernet,
-      disable_mass_storage: disable_mass_storage
+      disable_mass_storage: disable_mass_storage,
+      hotplug_interval: hotplug_interval.seconds
     )
     GlobalKVM.manager = kvm_manager
 
@@ -198,25 +237,53 @@ module Main
     # Cleanup on exit
     at_exit do
       AntiIdle.stop if anti_idle_enabled
+      kvm_manager.stop_hotplug_polling
       kvm_manager.cleanup
     end
 
     Log.info { "" }
-    Log.info { "🖥️  Ultra Low-Latency KVM Server (V4cr)" }
-    Log.info { "━" * 50 }
-    Log.info { "📹 Video device: #{kvm_manager.video_device}" }
-    Log.info { "📐 Resolution: #{kvm_manager.width}x#{kvm_manager.height}@#{kvm_manager.fps}fps" }
-    Log.info { "🌐 Web interface: http://localhost:#{port}" }
-    Log.info { "📡 MJPEG stream: http://localhost:#{port}/video.mjpg" }
-    Log.info { "⌨️  HID keyboard: #{kvm_manager.keyboard_enabled? ? "✅ Ready" : "❌ Disabled"}" }
-    Log.info { "🖱️  HID mouse: #{kvm_manager.mouse_disabled? ? "❌ Disabled by command line" : (kvm_manager.mouse_enabled? ? "✅ Ready" : "❌ Failed to initialize")}" }
-    Log.info { "🔌 Ethernet gadget: #{kvm_manager.ethernet_disabled? ? "❌ Disabled by command line" : (kvm_manager.ecm_status[:enabled] ? "✅ Ready" : "❌ Failed to initialize")}" }
-    Log.info { "💾 Mass storage gadget: #{kvm_manager.mass_storage_disabled? ? "❌ Disabled by command line" : (kvm_manager.status[:storage][:attached] ? "✅ Ready" : "⏸️ Idle (no image selected)")}" }
-    Log.info { "⚡ Architecture: Direct V4cr MJPEG + USB HID" }
-    Log.info { "🎯 Target latency: <50ms" }
+    # Print mode-specific information
+    if video_available && otg_supported
+      Log.info { "🖥️  Ultra Low-Latency KVM Server (V4cr) - Full KVM Mode" }
+      Log.info { "━" * 50 }
+      Log.info { "📹 Video device: #{kvm_manager.video_device}" }
+      Log.info { "📐 Resolution: #{kvm_manager.width}x#{kvm_manager.height}@#{kvm_manager.fps}fps" }
+      Log.info { "🌐 Web interface: http://localhost:#{port}" }
+      Log.info { "📡 MJPEG stream: http://localhost:#{port}/video.mjpg" }
+      Log.info { "⌨️  HID keyboard: #{kvm_manager.keyboard_enabled? ? "✅ Ready" : "❌ Disabled"}" }
+      Log.info { "🖱️  HID mouse: #{kvm_manager.mouse_disabled? ? "❌ Disabled by command line" : (kvm_manager.mouse_enabled? ? "✅ Ready" : "❌ Failed to initialize")}" }
+      Log.info { "🔌 Ethernet gadget: #{kvm_manager.ethernet_disabled? ? "❌ Disabled by command line" : (kvm_manager.ecm_status[:enabled] ? "✅ Ready" : "❌ Failed to initialize")}" }
+      Log.info { "💾 Mass storage gadget: #{kvm_manager.mass_storage_disabled? ? "❌ Disabled by command line" : (kvm_manager.status[:storage][:attached] ? "✅ Ready" : "⏸️ Idle (no image selected)")}" }
+      Log.info { "⚡ Architecture: Direct V4cr MJPEG + USB HID" }
+      Log.info { "🎯 Target latency: <50ms" }
+    elsif video_available && !otg_supported
+      Log.info { "🖥️  Ultra Low-Latency KVM Server (V4cr) - Video Streaming Mode" }
+      Log.info { "━" * 50 }
+      Log.info { "📹 Video device: #{kvm_manager.video_device}" }
+      Log.info { "📐 Resolution: #{kvm_manager.width}x#{kvm_manager.height}@#{kvm_manager.fps}fps" }
+      Log.info { "🌐 Web interface: http://localhost:#{port}" }
+      Log.info { "📡 MJPEG stream: http://localhost:#{port}/video.mjpg" }
+      Log.info { "⚠️  USB OTG not available - HID devices disabled" }
+      Log.info { "⚡ Architecture: Direct V4cr MJPEG (video only)" }
+    elsif !video_available && otg_supported
+      Log.info { "🖥️  Ultra Low-Latency KVM Server (V4cr) - Input Mode" }
+      Log.info { "━" * 50 }
+      Log.info { "🌐 Web interface: http://localhost:#{port}" }
+      Log.info { "⌨️  HID keyboard: #{kvm_manager.keyboard_enabled? ? "✅ Ready" : "❌ Disabled"}" }
+      Log.info { "🖱️  HID mouse: #{kvm_manager.mouse_disabled? ? "❌ Disabled by command line" : (kvm_manager.mouse_enabled? ? "✅ Ready" : "❌ Failed to initialize")}" }
+      Log.info { "🔌 Ethernet gadget: #{kvm_manager.ethernet_disabled? ? "❌ Disabled by command line" : (kvm_manager.ecm_status[:enabled] ? "✅ Ready" : "❌ Failed to initialize")}" }
+      Log.info { "💾 Mass storage gadget: #{kvm_manager.mass_storage_disabled? ? "❌ Disabled by command line" : (kvm_manager.status[:storage][:attached] ? "✅ Ready" : "⏸️ Idle (no image selected)")}" }
+      Log.info { "⚡ Architecture: USB HID (input only)" }
+      Log.warn { "⚠️  Video input not available - video streaming disabled" }
+      if enable_hotplug
+        Log.info { "🔄 Hotplug polling enabled (checking every #{hotplug_interval}s)" }
+      end
+    end
     Log.info { "" }
-    Log.warn { "⚠️  Note: HID keyboard and mouse require root privileges and USB OTG support" }
-    Log.warn { "   Run with: sudo ./bin/kv" }
+    if otg_supported
+      Log.warn { "⚠️  Note: HID keyboard and mouse require root privileges" }
+      Log.warn { "   Run with: sudo ./bin/kv" }
+    end
     Log.info { "" }
     Log.info { "💡 Configuration:" }
     Log.info { "   Video device: #{video_device}" }

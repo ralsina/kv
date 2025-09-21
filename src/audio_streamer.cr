@@ -20,6 +20,7 @@ class AudioStreamer
     @running = false
     @clients_mutex = Mutex.new
     @clients = [] of Channel(Tuple(Bytes, Int64))
+    Log.warn { "Audio device is empty - audio streaming disabled" } if @audio_device.empty?
   end
 
   def add_client(channel : Channel(Tuple(Bytes, Int64)))
@@ -37,7 +38,7 @@ class AudioStreamer
 
   # Start the background audio streaming fiber (publisher)
   def start_streaming
-    return if @running
+    return if @running || @audio_device.empty?
     @running = true
     @stop_channel = Channel(Nil).new
     @streaming_fiber = spawn do

@@ -23,7 +23,12 @@ class V4crVideoCapture
   @clients = [] of Channel(Bytes)
 
   def initialize(@device_path : String = "/dev/video0", @width : UInt32 = 640_u32, @height : UInt32 = 480_u32, @fps : Int32 = 30, @jpeg_quality : Int32 = 100)
-    @device = V4cr::Device.new(@device_path)
+    if @device_path.empty?
+      Log.warn { "Video device path is empty - video capture disabled" }
+      @device = V4cr::Device.new("/dev/null") # Use null device as placeholder
+    else
+      @device = V4cr::Device.new(@device_path)
+    end
   end
 
   # Allow changing FPS at runtime

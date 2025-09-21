@@ -185,19 +185,38 @@ class KVMManagerV4cr
   @video_jpeg_quality : Int32 = 100
   @detected_qualities : Array(String)
   @audio_streamer : AudioStreamer
+  @hotplug_interval : Time::Span
+  @hotplug_fiber : Fiber?
 
-  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, @video_jpeg_quality = 100, ecm_enabled = false, disable_mouse = false, disable_ethernet = false, disable_mass_storage = false)
+  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, @video_jpeg_quality = 100, ecm_enabled = false, disable_mouse = false, disable_ethernet = false, disable_mass_storage = false, @hotplug_interval = 60.seconds)
     @ecm_enabled = ecm_enabled && !disable_ethernet
     @disable_mouse = disable_mouse
     @disable_ethernet = disable_ethernet
     @disable_mass_storage = disable_mass_storage
-    @mass_storage = disable_mass_storage ? nil : MassStorageManager.new
-    @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
-    @audio_streamer = AudioStreamer.new(@audio_device)
+
+    # Initialize video components only if video device is available
+    if @video_device.empty? || !File.exists?(@video_device)
+      @video_device = "" # Mark as unavailable
+      Log.warn { "Video device not available - video streaming disabled" }
+    end
+
+    @video_capture = if @video_device.empty?
+                       # Create a dummy video capture that does nothing
+                       V4crVideoCapture.new("", @width, @height, @fps, @video_jpeg_quality)
+                     else
+                       V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
+                     end
+
+    @audio_streamer = if @video_device.empty?
+                        # Audio streaming disabled when video is disabled
+                        AudioStreamer.new("")
+                      else
+                        AudioStreamer.new(@audio_device)
+                      end
 
     # Detect available qualities from the video device
     detected_quality_objects = [] of {width: UInt32, height: UInt32}
-    if device_info = V4crVideoUtils.detect_device_info(@video_device)
+    if !@video_device.empty? && (device_info = V4crVideoUtils.detect_device_info(@video_device))
       device_info.resolutions.each do |res_str|
         if match = res_str.match(/(\d+)x(\d+)/)
           width = match[1].to_u32
@@ -214,14 +233,34 @@ class KVMManagerV4cr
       "#{quality_obj[:width]}x#{quality_obj[:height]}"
     end
 
-    # If no qualities detected, fall back to a default or raise error
+    # If no qualities detected, fall back to a default
     if @detected_qualities.empty?
-      Log.warn { "No video qualities detected for #{@video_device}. Falling back to 640x480." }
-      @detected_qualities << "640x480"
+      if @video_device.empty?
+        # No video device - provide empty qualities list
+        Log.info { "No video device - no qualities available" }
+      else
+        Log.warn { "No video qualities detected for #{@video_device}. Falling back to 640x480." }
+        @detected_qualities << "640x480"
+      end
     end
 
-    setup_hid_devices
-    start_video_stream # Start video automatically
+    # Only setup HID devices if we have OTG support
+    if HardwareDetector.otg_hardware_available?
+      setup_hid_devices
+    else
+      Log.warn { "USB OTG hardware not available - HID devices disabled" }
+      @keyboard_enabled = false
+      @mouse_enabled = false
+    end
+
+    # Only start video stream if we have video
+    if !@video_device.empty?
+      start_video_stream # Start video automatically
+    else
+      Log.info { "Video streaming not started - no video device available" }
+      # Start hotplug polling if interval > 0
+      start_hotplug_polling if @hotplug_interval > 0.seconds
+    end
   end
 
   # Returns the absolute mouse device path
@@ -572,7 +611,7 @@ class KVMManagerV4cr
                        resolution:        "#{@width}x#{@height}",
                        fps:               @fps,
                        actual_fps:        @video_capture.actual_fps,
-                       stream_url:        "http://#{get_ip_address}:#{get_server_port}/video.mjpg",
+                       stream_url:        "http://localhost:#{get_server_port}/video.mjpg",
                        driver:            info.try(&.[:driver]) || "unknown",
                        card:              info.try(&.[:card]) || "unknown",
                        format:            info.try(&.[:format]) || "unknown",
@@ -720,11 +759,85 @@ class KVMManagerV4cr
     Kemal.config.port
   end
 
-  private def get_ip_address
-    # Simple way to get local IP
-    hostname = `hostname -I`.strip.split.first?
-    hostname || "localhost"
-  rescue
-    "localhost"
+  # Hotplug polling for video devices
+  private def start_hotplug_polling
+    return if @hotplug_interval <= 0.seconds || !@video_device.empty?
+
+    Log.info { "Starting video device hotplug polling (interval: #{@hotplug_interval.total_seconds}s)" }
+    @hotplug_fiber = spawn do
+      while @hotplug_fiber
+        sleep @hotplug_interval
+
+        # Check if video device is now available
+        if HardwareDetector.video_input_available?
+          detected_device = HardwareDetector.detect_best_video_device(@width, @height)
+          if detected_device
+            Log.info { "Hotplug: Video device detected - #{detected_device}" }
+
+            # Initialize video capture with the new device
+            @video_device = detected_device
+            @video_capture = V4crVideoCapture.new(@video_device, @width, @height, @fps, @video_jpeg_quality)
+            @audio_streamer = AudioStreamer.new(@audio_device)
+
+            # Update detected qualities
+            update_detected_qualities
+
+            # Start video streaming
+            if start_video_stream
+              Log.info { "Hotplug: Video streaming started successfully" }
+
+              # Notify web clients via WebSocket
+              notify_video_device_change(true, detected_device)
+
+              # Stop hotplug polling since we now have a device
+              @hotplug_fiber = nil
+              break
+            else
+              Log.error { "Hotplug: Failed to start video streaming" }
+              @video_device = ""
+            end
+          end
+        end
+      end
+    end
+  end
+
+  private def update_detected_qualities
+    detected_quality_objects = [] of {width: UInt32, height: UInt32}
+    if device_info = V4crVideoUtils.detect_device_info(@video_device)
+      device_info.resolutions.each do |res_str|
+        if match = res_str.match(/(\d+)x(\d+)/)
+          width = match[1].to_u32
+          height = match[2].to_u32
+          detected_quality_objects << {width: width, height: height}
+        end
+      end
+    end
+
+    # Sort qualities: highest resolution first
+    @detected_qualities = detected_quality_objects.uniq.sort_by! do |quality_obj|
+      [-quality_obj[:width].to_i32, -quality_obj[:height].to_i32]
+    end.map do |quality_obj|
+      "#{quality_obj[:width]}x#{quality_obj[:height]}"
+    end
+
+    if @detected_qualities.empty?
+      @detected_qualities << "640x480"
+    end
+  end
+
+  private def notify_video_device_change(available : Bool, device : String)
+    # This would typically send a WebSocket message to connected clients
+    # For now, just log the change
+    Log.info { "Video device status changed: available=#{available}, device=#{device}" }
+  end
+
+  def stop_hotplug_polling
+    @hotplug_fiber = nil
+    Log.info { "Stopped video device hotplug polling" }
+  end
+
+  def hotplug_active? : Bool
+    @hotplug_fiber != nil
   end
 end
