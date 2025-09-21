@@ -12,6 +12,8 @@ You can see a short demo video [here](https://youtu.be/_NCVytMPW18?si=67kIt7nWbr
 
 Some more information in [the website](https://kv.ralsina.me)
 
+There is a [tutorial in Reddit](https://www.reddit.com/r/homelab/comments/1nld478/building_a_cheap_kvm_using_an_sbc_and_kv/) by [VeryLargeCucumber](https://www.reddit.com/user/VeryLargeCucumber/)
+
 ## Known Bugs
 
 * Framerate detection is broken. You can use `-f` as a workaround. 
