@@ -1,0 +1,47 @@
+<svg width="640" height="360" viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#333" stroke-width="1" opacity="0.3"/>
+    </pattern>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2d2d2d;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="640" height="360" fill="url(#grad1)"/>
+  <rect width="640" height="360" fill="url(#grid)"/>
+
+  <!-- Monitor icon -->
+  <g transform="translate(320, 140)">
+    <!-- Monitor screen -->
+    <rect x="-80" y="-60" width="160" height="100" rx="8" fill="#333" stroke="#555" stroke-width="2"/>
+    <rect x="-70" y="-50" width="140" height="80" rx="4" fill="#1a1a1a"/>
+
+    <!-- Monitor stand -->
+    <rect x="-20" y="40" width="40" height="8" fill="#555"/>
+    <rect x="-30" y="48" width="60" height="6" rx="3" fill="#444"/>
+
+    <!-- Signal waves -->
+    <g transform="translate(0, -10)">
+      <path d="M -30,-30 Q -40,-40 -50,-30" fill="none" stroke="#666" stroke-width="2" opacity="0.6"/>
+      <path d="M -25,-25 Q -32,-32 -40,-25" fill="none" stroke="#666" stroke-width="2" opacity="0.8"/>
+      <circle cx="-20" cy="-20" r="2" fill="#666"/>
+    </g>
+
+    <!-- X mark through screen -->
+    <g stroke="#666" stroke-width="3" opacity="0.5">
+      <line x1="-50" y1="-30" x2="50" y2="30"/>
+      <line x1="50" y1="-30" x2="-50" y2="30"/>
+    </g>
+  </g>
+
+  <!-- Text -->
+  <text x="320" y="240" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="18" font-weight="500">
+    No Video Device
+  </text>
+  <text x="320" y="265" text-anchor="middle" fill="#888" font-family="Arial, sans-serif" font-size="14">
+    Connect a video capture device to stream
+  </text>
+</svg>

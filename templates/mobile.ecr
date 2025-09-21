@@ -123,7 +123,12 @@
       </header>
       <div class="video-container">
           <div class="video-display-wrapper">
-              <img id="videoStream" class="video-stream" src="/video.mjpg" alt="Video Stream">
+              <img id="videoStream" class="video-stream" src="/video.mjpg" alt="Video Stream"
+                   onload="if(document.getElementById('no-video')){this.style.display='block';document.getElementById('no-video').style.display='none';}"
+                   onerror="if(document.getElementById('no-video')){this.style.display='none';document.getElementById('no-video').style.display='block';}">
+          </div>
+          <div id="no-video" class="no-video" role="status">
+              <img src="/no-video-placeholder.svg" alt="No video device available" style="max-width: 100%; height: auto; max-height: 240px;">
           </div>
       </div>
       <div id="virtualKeyboard" class="on-screen-keyboard">

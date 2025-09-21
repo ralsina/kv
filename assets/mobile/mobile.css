@@ -34,6 +34,7 @@ html, body {
     justify-content: center;
     overflow: hidden; /* Hide overflow if video is larger than container */
     background-color: var(--pico-color-black); /* Black background for video area */
+    position: relative; /* Needed for absolute positioning of no-video */
 }
 
 .video-display-wrapper {
@@ -131,6 +132,22 @@ html, body {
 
 .control-btn:hover {
     background-color: var(--pico-primary-hover);
+}
+
+/* Mobile no-video overlay */
+.video-container .no-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 1em;
+    background: rgba(0, 0, 0, 0.1);
+    z-index: 1;
 }
 
 /* Material Icons styling */
