@@ -348,3 +348,83 @@
             background: rgba(255, 255, 255, 0.8);
             color: #000;
         }
+
+        /* Toast notification styles */
+        #toast-notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 10000;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            pointer-events: none;
+            max-width: 80%;
+            text-align: center;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        #toast-notification.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        #toast-notification.hiding {
+            opacity: 0;
+            transform: translateX(-50%) translateY(20px);
+        }
+
+        #toast-notification.success {
+            background: rgba(34, 197, 94, 0.9);
+        }
+
+        #toast-notification.warning {
+            background: rgba(251, 191, 36, 0.9);
+        }
+
+        #toast-notification.error {
+            background: rgba(239, 68, 68, 0.9);
+        }
+
+        #toast-notification.info {
+            background: rgba(59, 130, 246, 0.9);
+        }
+
+        /* Light theme toast styles */
+        [data-theme="light"] #toast-notification {
+            background: rgba(255, 255, 255, 0.95);
+            color: #000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        [data-theme="light"] #toast-notification.success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #166534;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        [data-theme="light"] #toast-notification.warning {
+            background: rgba(251, 191, 36, 0.1);
+            color: #92400e;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        [data-theme="light"] #toast-notification.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #991b1b;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        [data-theme="light"] #toast-notification.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #1e40af;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }

@@ -8,14 +8,31 @@ function showToast (message, type = 'info') {
     toast.id = 'toast-notification'
     document.body.appendChild(toast)
   }
+
+  // Clear any existing classes and timeouts
+  toast.className = ''
+  clearTimeout(toast.hideTimeout)
+
+  // Set content and type
   toast.textContent = message
-  toast.className = `toast ${type}`
-  toast.style.display = 'block'
-  toast.style.opacity = '1'
-  setTimeout(() => {
-    toast.style.opacity = '0'
-    setTimeout(() => { toast.style.display = 'none' }, 400)
-  }, 3500)
+  toast.classList.add(type)
+
+  // Force reflow to ensure animation plays
+  toast.offsetHeight
+
+  // Show the toast
+  toast.classList.add('show')
+
+  // Hide after 5 seconds (increased from 3.5)
+  toast.hideTimeout = setTimeout(() => {
+    toast.classList.add('hiding')
+    toast.classList.remove('show')
+
+    // Remove from DOM after animation completes
+    setTimeout(() => {
+      toast.classList.remove('hiding', type)
+    }, 400)
+  }, 5000)
 }
 
 // --- Device Status Handler ---
