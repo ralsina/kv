@@ -65,8 +65,8 @@ function handleDeviceStatus (videoStatus) {
       videoElement.style.display = 'none'
     }
     if (noVideoMessage) {
-      noVideoMessage.style.display = 'block'
-      noVideoMessage.textContent = videoStatus.message || 'No video device available'
+      noVideoMessage.style.display = 'flex'
+      // Don't change the content - it's our SVG placeholder
     }
     if (wasAvailable) {
       showToast(videoStatus.message || 'Video device disconnected', 'warning')
@@ -103,7 +103,14 @@ window.apiFetch = function (endpoint, options = {}, onSuccess, onError) {
       if (onSuccess) onSuccess(data)
     })
     .catch(error => {
-      const errorMessage = `Error: ${error.message}`
+      let errorMessage = error.message
+      // Make common errors more user-friendly
+      if (error.message.includes('Failed to fetch')) {
+        errorMessage = 'Connection lost. Please check if the server is running.'
+      } else if (error.message.includes('NetworkError')) {
+        errorMessage = 'Network error. Please check your connection.'
+      }
+
       if (onError) onError(error)
       else showToast(errorMessage, 'error')
       console.error('API fetch error:', error)
@@ -131,6 +138,11 @@ window.setupInputWebSocket = function () {
   wsInput.onopen = function () {
     console.log('WebSocket connected')
     wsInputReady = true
+    // Show reconnection message only if it was previously disconnected
+    if (window.wsPreviouslyDisconnected) {
+      showToast('Reconnected to server', 'success')
+      window.wsPreviouslyDisconnected = false
+    }
     while (wsInputQueue.length > 0) {
       window.wsSendInput(wsInputQueue.shift())
     }
@@ -139,6 +151,8 @@ window.setupInputWebSocket = function () {
   wsInput.onclose = function () {
     console.log('WebSocket disconnected, attempting to reconnect...')
     wsInputReady = false
+    window.wsPreviouslyDisconnected = true
+    showToast('Connection lost. Reconnecting...', 'warning')
     setTimeout(window.setupInputWebSocket, 2000) // Reconnect after 2 seconds
   }
 
