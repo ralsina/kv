@@ -1,3 +1,18 @@
+## [0.11.0] - 2025-09-22
+
+### 🚀 Features
+
+- Add optional USB gadgets support with CLI disable flags
+- Add graceful hardware failure handling and video hotplug support
+- Improve hotplug support for video capture devices
+- Add real-time device status notifications via WebSocket
+- Enhance toast notifications with smooth animations
+- Improve error messages for better user experience
+- Add static video placeholder and fix positioning
+
+### 📚 Documentation
+
+- Link to reddit tutorial
 ## [0.10.0] - 2025-09-16
 
 ### 🚀 Features
@@ -7,6 +22,7 @@
 ### 💼 Other
 
 - Release v0.9.2
+- Release v0.10.0
 
 ### 🧪 Testing
 
