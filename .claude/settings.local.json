@@ -9,7 +9,17 @@
       "Bash(git checkout:*)",
       "Bash(git add:*)",
       "Bash(gh pr create:*)",
-      "Bash(./build_static.sh)"
+      "Bash(./build_static.sh)",
+      "Bash(./extract_popular_layouts.sh:*)",
+      "Bash(bash:*)",
+      "Read(//usr/share/xkeyboard-config-2/symbols/**)",
+      "Bash(setxkbmap:*)",
+      "Read(//tmp/**)",
+      "Bash(xkbcomp:*)",
+      "Bash(for:*)",
+      "Bash(do:*)",
+      "Bash(echo:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

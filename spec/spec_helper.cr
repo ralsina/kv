@@ -1,2 +1,4 @@
 require "spec"
-require "../src/main"
+
+# Configure logging for tests
+Log.setup("*", :error)

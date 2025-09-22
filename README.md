@@ -16,7 +16,40 @@ There is a [tutorial in Reddit](https://www.reddit.com/r/homelab/comments/1nld47
 
 ## Known Bugs
 
-* Framerate detection is broken. You can use `-f` as a workaround. 
+* Framerate detection is broken. You can use `-f` as a workaround.
+
+## Keyboard Layouts
+
+KV supports multiple keyboard layouts to work with non-QWERTY keyboards. The layouts are extracted from XKB (X Keyboard Extension) data to ensure accuracy.
+
+### Adding New Keyboard Layouts
+
+The `utils/extract_xkb_layouts.cr` utility can extract keyboard layout data from XKB symbol files:
+
+```bash
+# Extract French AZERTY layout
+crystal run utils/extract_xkb_layouts.cr -- fr -o layouts/
+
+# Extract German QWERTZ layout with variant
+crystal run utils/extract_xkb_layouts.cr -- de -v nodeadkeys -o layouts/
+```
+
+#### Usage
+
+```
+Usage: extract_xkb_layouts [options] LAYOUT
+
+    -v VARIANT, --variant=VARIANT   Keyboard variant
+    -o DIR, --output=DIR            Output directory
+    -h, --help                      Show this help
+```
+
+The utility generates Crystal code that can be integrated into `src/keyboard_layouts.cr`.
+
+### Currently Supported Layouts
+
+- **US QWERTY** (default)
+- More layouts can be added using the extraction utility
 
 ## TODO
 

@@ -62,12 +62,12 @@ class WebSocketManager
   # Send device status update to all clients
   def send_device_status(available : Bool, device : String, message : String? = nil)
     data = {
-      "type" => "device_status",
+      "type"  => "device_status",
       "video" => {
         "available" => available,
-        "device" => device,
-        "message" => message || (available ? "Video device connected" : "Video device disconnected")
-      }
+        "device"    => device,
+        "message"   => message || (available ? "Video device connected" : "Video device disconnected"),
+      },
     }
     broadcast(data.to_json)
   end
@@ -75,8 +75,8 @@ class WebSocketManager
   # Send warning message to all clients
   def send_warning(message : String)
     data = {
-      "type" => "warning",
-      "message" => message
+      "type"    => "warning",
+      "message" => message,
     }
     broadcast_json(data)
   end
@@ -84,8 +84,8 @@ class WebSocketManager
   # Send info message to all clients
   def send_info(message : String)
     data = {
-      "type" => "info",
-      "message" => message
+      "type"    => "info",
+      "message" => message,
     }
     broadcast_json(data)
   end

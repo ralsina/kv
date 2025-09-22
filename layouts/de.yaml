@@ -1,0 +1,121 @@
+name: de
+display_name: "de"
+letters:
+  a: "0x16"
+  b: "0x23"
+  c: "0x21"
+  d: "0x18"
+  e: "0x6"
+  f: "0x19"
+  g: "0x1a"
+  h: "0x1b"
+  i: "0xb"
+  j: "0x1c"
+  k: "0x1d"
+  l: "0x1e"
+  m: "0x25"
+  n: "0x24"
+  o: "0xc"
+  p: "0xd"
+  q: "0x4"
+  r: "0x7"
+  s: "0x17"
+  t: "0x8"
+  u: "0xa"
+  v: "0x22"
+  w: "0x5"
+  x: "0x20"
+  y: "0x1f"
+  z: "0x9"
+symbols:
+  1:
+    code: "0x1e"
+    shift: false
+  "!":
+    code: "0x1e"
+    shift: true
+  2:
+    code: "0x1f"
+    shift: false
+  "\"":
+    code: "0x1f"
+    shift: true
+  3:
+    code: "0x20"
+    shift: false
+  4:
+    code: "0x21"
+    shift: false
+  $:
+    code: "0x21"
+    shift: true
+  5:
+    code: "0x22"
+    shift: false
+  "%":
+    code: "0x22"
+    shift: true
+  6:
+    code: "0x23"
+    shift: false
+  "&":
+    code: "0x23"
+    shift: true
+  7:
+    code: "0x24"
+    shift: false
+  /:
+    code: "0x24"
+    shift: true
+  8:
+    code: "0x25"
+    shift: false
+  (:
+    code: "0x25"
+    shift: true
+  9:
+    code: "0x26"
+    shift: false
+  ):
+    code: "0x26"
+    shift: true
+  0:
+    code: "0x27"
+    shift: false
+  "=":
+    code: "0x27"
+    shift: true
+  "?":
+    code: "0x2d"
+    shift: true
+  +:
+    code: "0x30"
+    shift: false
+  "*":
+    code: "0x30"
+    shift: true
+  "#":
+    code: "0x31"
+    shift: false
+  "'":
+    code: "0x31"
+    shift: true
+  ",":
+    code: "0x26"
+    shift: false
+  ;:
+    code: "0x26"
+    shift: true
+  .:
+    code: "0x27"
+    shift: false
+  ":":
+    code: "0x27"
+    shift: true
+  "-":
+    code: "0x28"
+    shift: false
+  _:
+    code: "0x28"
+    shift: true
+dead_keys: {}

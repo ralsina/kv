@@ -45,10 +45,10 @@ module HardwareDetector
     # If no UDC entries, check for platform devices that might support OTG
     unless found_controller
       controllers = [
-        "/sys/bus/platform/devices/*.dwc2",  # DesignWare USB2 Controller
-        "/sys/bus/platform/devices/*.dwc3",  # DesignWare USB3 Controller
-        "/sys/bus/platform/devices/*.ci_hdrc",  # ChipIdea controller
-        "/sys/bus/platform/devices/*.musb",  # Mentor USB controller
+        "/sys/bus/platform/devices/*.dwc2",    # DesignWare USB2 Controller
+        "/sys/bus/platform/devices/*.dwc3",    # DesignWare USB3 Controller
+        "/sys/bus/platform/devices/*.ci_hdrc", # ChipIdea controller
+        "/sys/bus/platform/devices/*.musb",    # Mentor USB controller
       ]
 
       controllers.each do |pattern|
@@ -88,7 +88,7 @@ module HardwareDetector
         if File.exists?(device)
           # Additional check for readability
           begin
-            File.open(device, "r") { |f| }
+            File.open(device, "r") { |_| }
             Log.debug { "Found video device: #{device}" }
             return true
           rescue
@@ -124,16 +124,15 @@ module HardwareDetector
   def self.hardware_status : NamedTuple(
     otg_available: Bool,
     video_available: Bool,
-    best_video_device: String?
-  )
+    best_video_device: String?)
     otg_available = otg_hardware_available?
     video_available = video_input_available?
     best_video_device = video_available ? detect_best_video_device : nil
 
     {
-      otg_available: otg_available,
-      video_available: video_available,
-      best_video_device: best_video_device
+      otg_available:     otg_available,
+      video_available:   video_available,
+      best_video_device: best_video_device,
     }
   end
 end

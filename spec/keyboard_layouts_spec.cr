@@ -1,10 +1,6 @@
-require "spec"
-require "log"
+require "./spec_helper"
 require "../src/keyboard_layouts"
 require "../src/keyboard"
-
-# Configure logging for tests
-Log.setup("*", :error)
 
 describe KeyboardLayouts do
   describe "QWERTY layout" do
@@ -95,8 +91,6 @@ describe HIDKeyboard do
     end
 
     it "can change layout" do
-      original_layout = HIDKeyboard.layout
-
       # This would normally log the change
       HIDKeyboard.layout = "us"
       HIDKeyboard.layout.name.should eq "US QWERTY"
@@ -110,47 +104,47 @@ describe HIDKeyboard do
     it "creates empty report for no keys" do
       report = HIDKeyboard.create_keyboard_report([] of String)
       report.size.should eq 8
-      report.all? { |b| b == 0_u8 }.should be_true
+      report.all? { |byte| byte == 0_u8 }.should be_true
     end
 
     it "handles single key press" do
       report = HIDKeyboard.create_keyboard_report(["a"])
-      report[0].should eq 0x00_u8  # No modifiers
-      report[2].should eq 0x04_u8  # 'a' key
-      report[3..7].all? { |b| b == 0_u8 }.should be_true
+      report[0].should eq 0x00_u8 # No modifiers
+      report[2].should eq 0x04_u8 # 'a' key
+      report[3..7].all? { |byte| byte == 0_u8 }.should be_true
     end
 
     it "handles multiple key presses" do
       report = HIDKeyboard.create_keyboard_report(["a", "s", "d"])
-      report[0].should eq 0x00_u8  # No modifiers
-      report[2].should eq 0x04_u8  # 'a' key
-      report[3].should eq 0x16_u8  # 's' key
-      report[4].should eq 0x07_u8  # 'd' key
-      report[5..7].all? { |b| b == 0_u8 }.should be_true
+      report[0].should eq 0x00_u8 # No modifiers
+      report[2].should eq 0x04_u8 # 'a' key
+      report[3].should eq 0x16_u8 # 's' key
+      report[4].should eq 0x07_u8 # 'd' key
+      report[5..7].all? { |byte| byte == 0_u8 }.should be_true
     end
 
     it "handles modifiers correctly" do
       report = HIDKeyboard.create_keyboard_report(["a"], ["ctrl"])
-      report[0].should eq 0x01_u8  # Ctrl modifier
-      report[2].should eq 0x04_u8  # 'a' key
+      report[0].should eq 0x01_u8 # Ctrl modifier
+      report[2].should eq 0x04_u8 # 'a' key
     end
 
     it "handles shift for uppercase letters" do
       report = HIDKeyboard.create_keyboard_report(["A"])
-      report[0].should eq 0x02_u8  # Shift modifier
-      report[2].should eq 0x04_u8  # 'a' key position
+      report[0].should eq 0x02_u8 # Shift modifier
+      report[2].should eq 0x04_u8 # 'a' key position
     end
 
     it "handles shift for symbols" do
       report = HIDKeyboard.create_keyboard_report(["!"])
-      report[0].should eq 0x02_u8  # Shift modifier
-      report[2].should eq 0x1e_u8  # '1' key position
+      report[0].should eq 0x02_u8 # Shift modifier
+      report[2].should eq 0x1e_u8 # '1' key position
     end
 
     it "handles special keys" do
       report = HIDKeyboard.create_keyboard_report(["enter"])
-      report[0].should eq 0x00_u8  # No modifiers
-      report[2].should eq 0x28_u8  # Enter key
+      report[0].should eq 0x00_u8 # No modifiers
+      report[2].should eq 0x28_u8 # Enter key
     end
 
     it "limits to 6 simultaneous keys" do
@@ -158,12 +152,12 @@ describe HIDKeyboard do
       report = HIDKeyboard.create_keyboard_report(keys)
 
       # First 6 keys should be present
-      report[2].should eq 0x04_u8  # 'a'
-      report[3].should eq 0x16_u8  # 's'
-      report[4].should eq 0x07_u8  # 'd'
-      report[5].should eq 0x09_u8  # 'f'
-      report[6].should eq 0x0a_u8  # 'g'
-      report[7].should eq 0x0b_u8  # 'h'
+      report[2].should eq 0x04_u8 # 'a'
+      report[3].should eq 0x16_u8 # 's'
+      report[4].should eq 0x07_u8 # 'd'
+      report[5].should eq 0x09_u8 # 'f'
+      report[6].should eq 0x0a_u8 # 'g'
+      report[7].should eq 0x0b_u8 # 'h'
 
       # 7th key ('j') should not be present
     end

@@ -1,0 +1,11 @@
+name: ru
+display_name: "ru"
+letters:
+symbols:
+  8:
+    code: "0x25"
+    shift: false
+  "*":
+    code: "0x25"
+    shift: true
+dead_keys: {}

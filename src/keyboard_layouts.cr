@@ -1,6 +1,9 @@
 # Keyboard Layout Definitions
 # Contains keyboard layout mappings for different keyboard layouts
 
+require "yaml"
+require "log"
+
 # Modifier key mappings (same for all layouts)
 MODIFIERS = {
   "ctrl"        => 0x01_u8,
@@ -29,18 +32,18 @@ SPECIAL_KEYS = {
   "spacebar"  => 0x2c_u8,
   "caps-lock" => 0x39_u8,
   # Function keys
-  "f1"       => 0x3a_u8,
-  "f2"       => 0x3b_u8,
-  "f3"       => 0x3c_u8,
-  "f4"       => 0x3d_u8,
-  "f5"       => 0x3e_u8,
-  "f6"       => 0x3f_u8,
-  "f7"       => 0x40_u8,
-  "f8"       => 0x41_u8,
-  "f9"       => 0x42_u8,
-  "f10"      => 0x43_u8,
-  "f11"      => 0x44_u8,
-  "f12"      => 0x45_u8,
+  "f1"  => 0x3a_u8,
+  "f2"  => 0x3b_u8,
+  "f3"  => 0x3c_u8,
+  "f4"  => 0x3d_u8,
+  "f5"  => 0x3e_u8,
+  "f6"  => 0x3f_u8,
+  "f7"  => 0x40_u8,
+  "f8"  => 0x41_u8,
+  "f9"  => 0x42_u8,
+  "f10" => 0x43_u8,
+  "f11" => 0x44_u8,
+  "f12" => 0x45_u8,
   # Navigation keys
   "insert"   => 0x49_u8,
   "home"     => 0x4a_u8,
@@ -79,9 +82,54 @@ module KeyboardLayouts
       @char_to_hid[char] = hid_code
       @shift_chars.add(char) if needs_shift
     end
+
+    def self.from_yaml(yaml_data : String | IO) : Layout
+      data = YAML.parse(yaml_data)
+
+      layout = Layout.new(data["display_name"].as_s)
+
+      # Load letters
+      if letters = data["letters"]?
+        letters.as_h.each do |char, hex_code|
+          hex_str = hex_code.as_s
+          # Remove "0x" prefix if present
+          hex_str = hex_str[2..-1] if hex_str.starts_with?("0x")
+          code = hex_str.to_i(16).to_u8
+          layout.add_char(char.as_s[0], code)
+        end
+      end
+
+      # Load symbols
+      if symbols = data["symbols"]?
+        symbols.as_h.each do |char, symbol_data|
+          # Handle both string and integer keys
+          char_str = char.as_s?
+          if char_str.nil?
+            # Integer key - convert to string
+            char_str = char.as_i.to_s
+          end
+
+          sym = symbol_data.as_h
+          hex_str = sym["code"].as_s
+          # Remove "0x" prefix if present
+          hex_str = hex_str[2..-1] if hex_str.starts_with?("0x")
+          code = hex_str.to_i(16).to_u8
+          needs_shift = sym["shift"]?.try(&.as_bool) || false
+          layout.add_char(char_str[0], code, needs_shift)
+        end
+      end
+
+      layout
+    end
   end
 
-  # US QWERTY Layout
+  # Layout directory
+  LAYOUT_DIR = "#{__DIR__}/../layouts"
+
+  # Cache for loaded layouts
+  @@layout_cache = Hash(String, Layout).new
+
+  # US QWERTY Layout (keep as fallback)
   QWERTY = Layout.new("US QWERTY").tap do |layout|
     # Letters (a-z maps to 0x04-0x1d)
     ('a'..'z').each_with_index do |char, i|
@@ -112,37 +160,67 @@ module KeyboardLayouts
     layout.add_char('/', 0x38_u8)
 
     # Shifted symbols
-    layout.add_char('!', 0x1e_u8, true)  # Shift + 1
-    layout.add_char('@', 0x1f_u8, true)  # Shift + 2
-    layout.add_char('#', 0x20_u8, true)  # Shift + 3
-    layout.add_char('$', 0x21_u8, true)  # Shift + 4
-    layout.add_char('%', 0x22_u8, true)  # Shift + 5
-    layout.add_char('^', 0x23_u8, true)  # Shift + 6
-    layout.add_char('&', 0x24_u8, true)  # Shift + 7
-    layout.add_char('*', 0x25_u8, true)  # Shift + 8
-    layout.add_char('(', 0x26_u8, true)  # Shift + 9
-    layout.add_char(')', 0x27_u8, true)  # Shift + 0
-    layout.add_char('_', 0x2d_u8, true)  # Shift + -
-    layout.add_char('+', 0x2e_u8, true)  # Shift + =
-    layout.add_char('{', 0x2f_u8, true)  # Shift + [
-    layout.add_char('}', 0x30_u8, true)  # Shift + ]
-    layout.add_char('|', 0x31_u8, true)  # Shift + \
-    layout.add_char(':', 0x33_u8, true)  # Shift + ;
-    layout.add_char('"', 0x34_u8, true)  # Shift + '
-    layout.add_char('~', 0x35_u8, true)  # Shift + `
-    layout.add_char('<', 0x36_u8, true)  # Shift + ,
-    layout.add_char('>', 0x37_u8, true)  # Shift + .
-    layout.add_char('?', 0x38_u8, true)  # Shift + /
+    layout.add_char('!', 0x1e_u8, true) # Shift + 1
+    layout.add_char('@', 0x1f_u8, true) # Shift + 2
+    layout.add_char('#', 0x20_u8, true) # Shift + 3
+    layout.add_char('$', 0x21_u8, true) # Shift + 4
+    layout.add_char('%', 0x22_u8, true) # Shift + 5
+    layout.add_char('^', 0x23_u8, true) # Shift + 6
+    layout.add_char('&', 0x24_u8, true) # Shift + 7
+    layout.add_char('*', 0x25_u8, true) # Shift + 8
+    layout.add_char('(', 0x26_u8, true) # Shift + 9
+    layout.add_char(')', 0x27_u8, true) # Shift + 0
+    layout.add_char('_', 0x2d_u8, true) # Shift + -
+    layout.add_char('+', 0x2e_u8, true) # Shift + =
+    layout.add_char('{', 0x2f_u8, true) # Shift + [
+    layout.add_char('}', 0x30_u8, true) # Shift + ]
+    layout.add_char('|', 0x31_u8, true) # Shift + \
+    layout.add_char(':', 0x33_u8, true) # Shift + ;
+    layout.add_char('"', 0x34_u8, true) # Shift + '
+    layout.add_char('~', 0x35_u8, true) # Shift + `
+    layout.add_char('<', 0x36_u8, true) # Shift + ,
+    layout.add_char('>', 0x37_u8, true) # Shift + .
+    layout.add_char('?', 0x38_u8, true) # Shift + /
+  end
+
+  # Load layout from YAML file
+  def self.load_layout(name : String) : Layout?
+    return @@layout_cache[name] if @@layout_cache.has_key?(name)
+
+    # Try different file naming conventions
+    paths = [
+      "#{LAYOUT_DIR}/#{name}.yaml",
+      "#{LAYOUT_DIR}/#{name.downcase}.yaml",
+    ]
+
+    paths.each do |path|
+      if File.exists?(path)
+        begin
+          layout = Layout.from_yaml(File.read(path))
+          @@layout_cache[name] = layout
+          return layout
+        rescue ex
+          Log.error { "Failed to load layout from #{path}: #{ex.message}" }
+        end
+      end
+    end
+
+    nil
   end
 
   # Get layout by name (default to QWERTY)
   def self.get_layout(name : String? = nil) : Layout
     if name
+      # Try to load from YAML first
+      layout = load_layout(name)
+      return layout if layout
+
+      # Fallback to QWERTY for known aliases
       case name.downcase
       when "qwerty", "us", "en-us"
         QWERTY
       else
-        QWERTY # Default to QWERTY for now
+        QWERTY # Default to QWERTY for unknown layouts
       end
     else
       QWERTY
@@ -151,6 +229,15 @@ module KeyboardLayouts
 
   # List available layouts
   def self.available_layouts : Array(String)
-    ["qwerty", "us", "en-US"]
+    layouts = ["qwerty", "us", "en-US"] # Default layouts
+
+    # Add available YAML layouts
+    if Dir.exists?(LAYOUT_DIR)
+      layouts += Dir.children(LAYOUT_DIR)
+        .select(&.ends_with?(".yaml"))
+        .map { |filename| filename[0..-6] } # Remove .yaml extension
+    end
+
+    layouts.uniq
   end
 end
