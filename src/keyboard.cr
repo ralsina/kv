@@ -1,8 +1,23 @@
 require "file_utils"
+require "./keyboard_layouts"
 
 # HID Keyboard Module for USB Gadget functionality
 module HIDKeyboard
   Log = ::Log.for(self)
+
+  # Current keyboard layout
+  @@layout : KeyboardLayouts::Layout = KeyboardLayouts::QWERTY
+
+  # Get current layout
+  def self.layout
+    @@layout
+  end
+
+  # Set keyboard layout
+  def self.layout=(layout_name : String)
+    @@layout = KeyboardLayouts.get_layout(layout_name)
+    Log.info { "Keyboard layout set to: #{@@layout.name}" }
+  end
 
   # Helper method for writing to HID device with retry mechanism
   private def self.write_with_retry(fd : Int32, data : Bytes, operation_name : String) : Bool
@@ -38,115 +53,13 @@ module HIDKeyboard
     false
   end
 
-  # Key modifier mappings
-  KMOD = {
-    "ctrl"        => 0x01_u8,
-    "left-ctrl"   => 0x01_u8,
-    "right-ctrl"  => 0x10_u8,
-    "shift"       => 0x02_u8,
-    "left-shift"  => 0x02_u8,
-    "right-shift" => 0x20_u8,
-    "alt"         => 0x04_u8,
-    "left-alt"    => 0x04_u8,
-    "right-alt"   => 0x40_u8,
-    "meta"        => 0x08_u8,
-    "left-meta"   => 0x08_u8,
-    "right-meta"  => 0x80_u8,
-  }
-
-  # Special key value mappings
-  KVAL = {
-    # Letters are handled dynamically in char_to_usage
-    # Numbers and symbols
-    "1" => 0x1e_u8,
-    "2" => 0x1f_u8,
-    "3" => 0x20_u8,
-    "4" => 0x21_u8,
-    "5" => 0x22_u8,
-    "6" => 0x23_u8,
-    "7" => 0x24_u8,
-    "8" => 0x25_u8,
-    "9" => 0x26_u8,
-    "0" => 0x27_u8,
-    # Special characters and punctuation
-    "-"  => 0x2d_u8, # Minus/hyphen
-    "="  => 0x2e_u8, # Equal
-    "["  => 0x2f_u8, # Left bracket
-    "]"  => 0x30_u8, # Right bracket
-    "\\" => 0x31_u8, # Backslash
-    ";"  => 0x33_u8, # Semicolon
-    "'"  => 0x34_u8, # Apostrophe/quote
-    "`"  => 0x35_u8, # Grave accent/backtick
-    ","  => 0x36_u8, # Comma
-    "."  => 0x37_u8, # Period
-    "/"  => 0x38_u8, # Forward slash
-    # Shifted symbols (using shift modifier)
-    "!"  => 0x1e_u8, # Shift + 1
-    "@"  => 0x1f_u8, # Shift + 2
-    "#"  => 0x20_u8, # Shift + 3
-    "$"  => 0x21_u8, # Shift + 4
-    "%"  => 0x22_u8, # Shift + 5
-    "^"  => 0x23_u8, # Shift + 6
-    "&"  => 0x24_u8, # Shift + 7
-    "*"  => 0x25_u8, # Shift + 8
-    "("  => 0x26_u8, # Shift + 9
-    ")"  => 0x27_u8, # Shift + 0
-    "_"  => 0x2d_u8, # Shift + -
-    "+"  => 0x2e_u8, # Shift + =
-    "{"  => 0x2f_u8, # Shift + [
-    "}"  => 0x30_u8, # Shift + ]
-    "|"  => 0x31_u8, # Shift + \
-    ":"  => 0x33_u8, # Shift + ;
-    "\"" => 0x34_u8, # Shift + '
-    "~"  => 0x35_u8, # Shift + `
-    "<"  => 0x36_u8, # Shift + ,
-    ">"  => 0x37_u8, # Shift + .
-    "?"  => 0x38_u8, # Shift + /
-    # Control keys
-    "enter"     => 0x28_u8,
-    "return"    => 0x28_u8,
-    "esc"       => 0x29_u8,
-    "escape"    => 0x29_u8,
-    "backspace" => 0x2a_u8,
-    "tab"       => 0x2b_u8,
-    "space"     => 0x2c_u8,
-    "spacebar"  => 0x2c_u8,
-    "caps-lock" => 0x39_u8,
-    # Function keys
-    "f1"       => 0x3a_u8,
-    "f2"       => 0x3b_u8,
-    "f3"       => 0x3c_u8,
-    "f4"       => 0x3d_u8,
-    "f5"       => 0x3e_u8,
-    "f6"       => 0x3f_u8,
-    "f7"       => 0x40_u8,
-    "f8"       => 0x41_u8,
-    "f9"       => 0x42_u8,
-    "f10"      => 0x43_u8,
-    "f11"      => 0x44_u8,
-    "f12"      => 0x45_u8,
-    "insert"   => 0x49_u8,
-    "home"     => 0x4a_u8,
-    "pageup"   => 0x4b_u8,
-    "delete"   => 0x4c_u8,
-    "del"      => 0x4c_u8,
-    "end"      => 0x4d_u8,
-    "pagedown" => 0x4e_u8,
-    "right"    => 0x4f_u8,
-    "left"     => 0x50_u8,
-    "down"     => 0x51_u8,
-    "up"       => 0x52_u8,
-    "num-lock" => 0x53_u8,
-    "kp-enter" => 0x58_u8,
-  }
-
   def self.create_keyboard_report(keys : Array(String), modifiers : Array(String) = [] of String) : Bytes
     report = Bytes.new(8, 0_u8)
     key_index = 0
 
     # Apply modifiers first
     modifiers.each do |mod|
-      if mod_val = KMOD[mod.downcase]?
+      if mod_val = @@layout.modifiers[mod.downcase]?
         report[0] |= mod_val
       end
     end
@@ -155,44 +68,26 @@ module HIDKeyboard
     keys.each do |key|
       break if key_index >= 6
 
-      # First check special keys in KVAL
-      if val = KVAL[key]?
-        # Check if this key requires shift modifier
-        shifted_chars = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", "\"", "~", "<", ">", "?"]
-        if shifted_chars.includes?(key)
-          report[0] |= KMOD["shift"]
-        end
-        report[2 + key_index] = val
+      # First check special keys
+      if hid_code = @@layout.special_keys[key.downcase]?
+        report[2 + key_index] = hid_code
         key_index += 1
       elsif key.size == 1
         # Handle single character
         char = key[0]
-        if char >= 'a' && char <= 'z'
-          # Lowercase letters
-          report[2 + key_index] = (char.ord - 'a'.ord + 0x04).to_u8
-          key_index += 1
-        elsif char >= 'A' && char <= 'Z'
-          # Uppercase letters - add shift modifier and use lowercase equivalent
-          report[0] |= KMOD["shift"]
-          report[2 + key_index] = (char.downcase.ord - 'a'.ord + 0x04).to_u8
-          key_index += 1
-        elsif char >= '0' && char <= '9'
-          # Numbers
-          if val = KVAL[char.to_s]?
-            report[2 + key_index] = val
-            key_index += 1
+        # Convert uppercase to lowercase and add shift
+        if char >= 'A' && char <= 'Z'
+          char = char.downcase
+          report[0] |= @@layout.modifiers["shift"]
+        end
+
+        if hid_code = @@layout.char_to_hid[char]?
+          # Check if this key requires shift modifier
+          if @@layout.shift_chars.includes?(char)
+            report[0] |= @@layout.modifiers["shift"]
           end
-        else
-          # Other characters - check KVAL mapping
-          if val = KVAL[char.to_s]?
-            # Check if this key requires shift modifier
-            shifted_chars = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", "\"", "~", "<", ">", "?"]
-            if shifted_chars.includes?(char.to_s)
-              report[0] |= KMOD["shift"]
-            end
-            report[2 + key_index] = val
-            key_index += 1
-          end
+          report[2 + key_index] = hid_code
+          key_index += 1
         end
       end
     end
@@ -232,26 +127,16 @@ module HIDKeyboard
       # Clear report first (like C code)
       report = Bytes.new(8, 0_u8)
 
-      # Handle character using KVAL mapping
-      char_str = char.to_s
-
+      # Handle character using layout mapping
       if char == ' '
         # Handle space explicitly
-        report[2] = KVAL["space"]
-      elsif char >= 'a' && char <= 'z'
-        # Lowercase letters
-        report[2] = (char.ord - 'a'.ord + 0x04).to_u8
-      elsif char >= 'A' && char <= 'Z'
-        # Uppercase letters - add shift and use lowercase equivalent
-        report[0] = KMOD["shift"]
-        report[2] = (char.downcase.ord - 'a'.ord + 0x04).to_u8
-      elsif val = KVAL[char_str]?
-        # Use KVAL mapping for numbers, symbols, and special chars
-        shifted_chars = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", "\"", "~", "<", ">", "?"]
-        if shifted_chars.includes?(char_str)
-          report[0] = KMOD["shift"]
+        report[2] = @@layout.special_keys["space"]
+      elsif hid_code = @@layout.char_to_hid[char]?
+        # Use layout mapping for characters
+        if @@layout.shift_chars.includes?(char)
+          report[0] = @@layout.modifiers["shift"]
         end
-        report[2] = val
+        report[2] = hid_code
       else
         # Skip unsupported characters
         Log.debug { "Skipping unsupported character: '#{char}' (#{char.ord})" }
