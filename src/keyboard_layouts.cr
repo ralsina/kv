@@ -3,6 +3,7 @@
 
 require "yaml"
 require "log"
+require "baked_file_system"
 
 # Modifier key mappings (same for all layouts)
 MODIFIERS = {
@@ -64,6 +65,12 @@ SPECIAL_KEYS = {
 # US QWERTY Keyboard Layout
 # Maps characters to USB HID usage codes
 module KeyboardLayouts
+  # Baked-in layout files
+  class Data
+    extend BakedFileSystem
+    bake_folder "#{__DIR__}/../layouts"
+  end
+
   struct Layout
     property name : String
     property char_to_hid : Hash(Char, UInt8)
@@ -123,120 +130,68 @@ module KeyboardLayouts
     end
   end
 
-  # Layout directory
-  LAYOUT_DIR = "#{__DIR__}/../layouts"
-
   # Cache for loaded layouts
   @@layout_cache = Hash(String, Layout).new
 
-  # US QWERTY Layout (keep as fallback)
-  QWERTY = Layout.new("US QWERTY").tap do |layout|
-    # Letters (a-z maps to 0x04-0x1d)
-    ('a'..'z').each_with_index do |char, i|
-      layout.add_char(char, (0x04 + i).to_u8)
-    end
-
-    # Numbers and symbols (unshifted)
-    layout.add_char('1', 0x1e_u8)
-    layout.add_char('2', 0x1f_u8)
-    layout.add_char('3', 0x20_u8)
-    layout.add_char('4', 0x21_u8)
-    layout.add_char('5', 0x22_u8)
-    layout.add_char('6', 0x23_u8)
-    layout.add_char('7', 0x24_u8)
-    layout.add_char('8', 0x25_u8)
-    layout.add_char('9', 0x26_u8)
-    layout.add_char('0', 0x27_u8)
-    layout.add_char('-', 0x2d_u8)
-    layout.add_char('=', 0x2e_u8)
-    layout.add_char('[', 0x2f_u8)
-    layout.add_char(']', 0x30_u8)
-    layout.add_char('\\', 0x31_u8)
-    layout.add_char(';', 0x33_u8)
-    layout.add_char('\'', 0x34_u8)
-    layout.add_char('`', 0x35_u8)
-    layout.add_char(',', 0x36_u8)
-    layout.add_char('.', 0x37_u8)
-    layout.add_char('/', 0x38_u8)
-
-    # Shifted symbols
-    layout.add_char('!', 0x1e_u8, true) # Shift + 1
-    layout.add_char('@', 0x1f_u8, true) # Shift + 2
-    layout.add_char('#', 0x20_u8, true) # Shift + 3
-    layout.add_char('$', 0x21_u8, true) # Shift + 4
-    layout.add_char('%', 0x22_u8, true) # Shift + 5
-    layout.add_char('^', 0x23_u8, true) # Shift + 6
-    layout.add_char('&', 0x24_u8, true) # Shift + 7
-    layout.add_char('*', 0x25_u8, true) # Shift + 8
-    layout.add_char('(', 0x26_u8, true) # Shift + 9
-    layout.add_char(')', 0x27_u8, true) # Shift + 0
-    layout.add_char('_', 0x2d_u8, true) # Shift + -
-    layout.add_char('+', 0x2e_u8, true) # Shift + =
-    layout.add_char('{', 0x2f_u8, true) # Shift + [
-    layout.add_char('}', 0x30_u8, true) # Shift + ]
-    layout.add_char('|', 0x31_u8, true) # Shift + \
-    layout.add_char(':', 0x33_u8, true) # Shift + ;
-    layout.add_char('"', 0x34_u8, true) # Shift + '
-    layout.add_char('~', 0x35_u8, true) # Shift + `
-    layout.add_char('<', 0x36_u8, true) # Shift + ,
-    layout.add_char('>', 0x37_u8, true) # Shift + .
-    layout.add_char('?', 0x38_u8, true) # Shift + /
-  end
-
-  # Load layout from YAML file
+  # Load layout from baked-in YAML file
   def self.load_layout(name : String) : Layout?
     return @@layout_cache[name] if @@layout_cache.has_key?(name)
 
-    # Try different file naming conventions
-    paths = [
-      "#{LAYOUT_DIR}/#{name}.yaml",
-      "#{LAYOUT_DIR}/#{name.downcase}.yaml",
+    # Try different file naming conventions from the baked data
+    filenames = [
+      "#{name}.yaml",
+      "#{name.downcase}.yaml",
     ]
 
-    paths.each do |path|
-      if File.exists?(path)
-        begin
-          layout = Layout.from_yaml(File.read(path))
-          @@layout_cache[name] = layout
-          return layout
-        rescue ex
-          Log.error { "Failed to load layout from #{path}: #{ex.message}" }
-        end
+    filenames.each do |filename|
+      begin
+        content = Data.get(filename).gets_to_end
+        layout = Layout.from_yaml(content)
+        @@layout_cache[name] = layout
+        return layout
+      rescue ex
+        # File not found or other error, just try the next one
+        Log.error { "Could not load layout #{filename}: #{ex.message}" }
       end
     end
 
     nil
   end
 
-  # Get layout by name (default to QWERTY)
+  # Get layout by name (default to US QWERTY)
   def self.get_layout(name : String? = nil) : Layout
-    if name
-      # Try to load from YAML first
-      layout = load_layout(name)
-      return layout if layout
+    # Default to "us" if no name is provided
+    name_to_load = name || "us"
 
-      # Fallback to QWERTY for known aliases
-      case name.downcase
-      when "qwerty", "us", "en-us"
-        QWERTY
-      else
-        QWERTY # Default to QWERTY for unknown layouts
-      end
-    else
-      QWERTY
+    # Handle aliases
+    case name_to_load.downcase
+    when "qwerty", "en-us"
+      name_to_load = "us"
+    when "azerty"
+      name_to_load = "fr"
     end
+
+    # Try to load from YAML
+    if layout = load_layout(name_to_load)
+      return layout
+    end
+
+    # If a specific layout was requested and not found, fallback to 'us'
+    if name_to_load != "us"
+      Log.warn { "Layout '#{name}' not found, falling back to 'us'." }
+      return get_layout("us")
+    end
+
+    # If 'us' layout itself fails to load, this is a critical error
+    raise "FATAL: Default keyboard layout 'us.yaml' could not be loaded."
   end
 
   # List available layouts
   def self.available_layouts : Array(String)
     layouts = ["qwerty", "us", "en-US"] # Default layouts
 
-    # Add available YAML layouts
-    if Dir.exists?(LAYOUT_DIR)
-      layouts += Dir.children(LAYOUT_DIR)
-        .select(&.ends_with?(".yaml"))
-        .map { |filename| filename[0..-6] } # Remove .yaml extension
-    end
+    # Add available YAML layouts from baked data
+    layouts += Data.files.select { |file| file.path.ends_with?(".yaml") }.map { |file| file.path[1..-6] }
 
     layouts.uniq
   end

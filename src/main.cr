@@ -218,8 +218,9 @@ module Main
     HIDKeyboard.layout = keyboard_layout
 
     # Check if the layout was actually loaded (falls back to QWERTY if not found)
-    if HIDKeyboard.layout.name.downcase != keyboard_layout.downcase &&
-       !["qwerty", "us", "en-us"].includes?(keyboard_layout.downcase)
+    if HIDKeyboard.layout.name.downcase == "us" &&
+       keyboard_layout.downcase != "us" &&
+       !["qwerty", "en-us"].includes?(keyboard_layout.downcase)
       Log.warn { "Unknown keyboard layout '#{keyboard_layout}'. Available layouts:" }
       KeyboardLayouts.available_layouts.each do |layout|
         Log.warn { "  - #{layout}" }
@@ -310,6 +311,7 @@ module Main
     Log.info { "   Framerate: #{fps} fps" }
     Log.info { "   JPEG Quality: #{jpeg_quality}" }
     Log.info { "   Server port: #{port}" }
+    Log.info { "   Keyboard Layout: #{HIDKeyboard.layout.name}" }
     Log.info { "" }
     Log.info { "V4cr implementation for zero-copy video streaming" }
     Log.info { "with native V4L2 access for minimal latency." }

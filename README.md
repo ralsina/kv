@@ -48,8 +48,20 @@ The utility generates Crystal code that can be integrated into `src/keyboard_lay
 
 ### Currently Supported Layouts
 
+KV supports the following layouts:
+
 - **US QWERTY** (default)
-- More layouts can be added using the extraction utility
+- **BR** (Brazilian)
+- **DE** (German QWERTZ)
+- **ES** (Spanish)
+- **FR** (French AZERTY, also accessible via `azerty` alias)
+- **GB** (UK English)
+- **IT** (Italian)
+- **JP** (Japanese)
+- **PT** (Portuguese)
+- **RU** (Russian)
+
+You can select a layout using the `-k` or `--kbd-layout` command-line option, e.g., `./bin/kv -k fr`.
 
 ## TODO
 

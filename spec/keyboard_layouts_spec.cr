@@ -3,14 +3,14 @@ require "../src/keyboard_layouts"
 require "../src/keyboard"
 
 describe KeyboardLayouts do
-  describe "QWERTY layout" do
-    it "loads QWERTY layout correctly" do
-      layout = KeyboardLayouts.get_layout("qwerty")
-      layout.name.should eq "US QWERTY"
+  describe "US layout" do
+    it "loads US layout correctly" do
+      layout = KeyboardLayouts.get_layout("us")
+      layout.name.should eq "us"
     end
 
     it "maps lowercase letters correctly" do
-      layout = KeyboardLayouts.get_layout("qwerty")
+      layout = KeyboardLayouts.get_layout("us")
 
       layout.char_to_hid['a'].should eq 0x04_u8
       layout.char_to_hid['b'].should eq 0x05_u8
@@ -18,7 +18,7 @@ describe KeyboardLayouts do
     end
 
     it "maps numbers correctly" do
-      layout = KeyboardLayouts.get_layout("qwerty")
+      layout = KeyboardLayouts.get_layout("us")
 
       layout.char_to_hid['1'].should eq 0x1e_u8
       layout.char_to_hid['2'].should eq 0x1f_u8
@@ -26,7 +26,7 @@ describe KeyboardLayouts do
     end
 
     it "maps symbols correctly" do
-      layout = KeyboardLayouts.get_layout("qwerty")
+      layout = KeyboardLayouts.get_layout("us")
 
       layout.char_to_hid['-'].should eq 0x2d_u8
       layout.char_to_hid['='].should eq 0x2e_u8
@@ -35,7 +35,7 @@ describe KeyboardLayouts do
     end
 
     it "identifies shift characters correctly" do
-      layout = KeyboardLayouts.get_layout("qwerty")
+      layout = KeyboardLayouts.get_layout("us")
 
       layout.shift_chars.should contain('!')
       layout.shift_chars.should contain('@')
@@ -52,7 +52,7 @@ describe KeyboardLayouts do
     end
 
     it "does NOT mark regular characters as shift" do
-      layout = KeyboardLayouts.get_layout("qwerty")
+      layout = KeyboardLayouts.get_layout("us")
 
       layout.shift_chars.should_not contain('a')
       layout.shift_chars.should_not contain('1')
@@ -62,45 +62,51 @@ describe KeyboardLayouts do
   end
 
   describe "layout lookup" do
-    it "accepts various QWERTY aliases" do
-      KeyboardLayouts.get_layout("qwerty").name.should eq "US QWERTY"
-      KeyboardLayouts.get_layout("us").name.should eq "US QWERTY"
-      KeyboardLayouts.get_layout("en-US").name.should eq "US QWERTY"
-      KeyboardLayouts.get_layout("en-us").name.should eq "US QWERTY"
+    it "accepts various US aliases" do
+      KeyboardLayouts.get_layout("qwerty").name.should eq "us"
+      KeyboardLayouts.get_layout("us").name.should eq "us"
+      KeyboardLayouts.get_layout("en-US").name.should eq "us"
+      KeyboardLayouts.get_layout("en-us").name.should eq "us"
     end
 
-    it "defaults to QWERTY for unknown layouts" do
-      KeyboardLayouts.get_layout("azerty").name.should eq "US QWERTY"
-      KeyboardLayouts.get_layout("nonexistent").name.should eq "US QWERTY"
-      KeyboardLayouts.get_layout(nil).name.should eq "US QWERTY"
+    it "handles aliases and defaults to US for unknown layouts" do
+      KeyboardLayouts.get_layout("azerty").name.should eq "fr"
+      KeyboardLayouts.get_layout("nonexistent").name.should eq "us"
+      KeyboardLayouts.get_layout(nil).name.should eq "us"
     end
 
     it "lists available layouts" do
       layouts = KeyboardLayouts.available_layouts
-      layouts.should contain("qwerty")
       layouts.should contain("us")
-      layouts.should contain("en-US")
+      layouts.should contain("fr")
+      layouts.should contain("de")
     end
   end
 end
 
 describe HIDKeyboard do
   describe "keyboard layout management" do
-    it "has default QWERTY layout" do
-      HIDKeyboard.layout.name.should eq "US QWERTY"
+    it "has default US layout" do
+      HIDKeyboard.layout = "us" # Ensure default is loaded
+      HIDKeyboard.layout.name.should eq "us"
     end
 
     it "can change layout" do
       # This would normally log the change
-      HIDKeyboard.layout = "us"
-      HIDKeyboard.layout.name.should eq "US QWERTY"
+      HIDKeyboard.layout = "fr"
+      HIDKeyboard.layout.name.should eq "fr"
 
       # Reset to original
-      HIDKeyboard.layout = "qwerty"
+      HIDKeyboard.layout = "us"
     end
   end
 
   describe "create_keyboard_report" do
+    before_each do
+      # Ensure we are using the US layout for these tests
+      HIDKeyboard.layout = "us"
+    end
+
     it "creates empty report for no keys" do
       report = HIDKeyboard.create_keyboard_report([] of String)
       report.size.should eq 8
@@ -165,7 +171,7 @@ describe HIDKeyboard do
 
   describe "character mapping consistency" do
     it "maps all printable ASCII characters" do
-      layout = HIDKeyboard.layout
+      layout = KeyboardLayouts.get_layout("us")
 
       # Test space (space is handled specially in send_text, not in layout)
       layout.char_to_hid.has_key?(' ').should be_false
@@ -188,7 +194,7 @@ describe HIDKeyboard do
       end
 
       # Test common symbols
-      ["-", "=", "[", "]", "\\\\", ";", "'", "`", ",", ".", "/", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", "\"", "~", "<", ">", "?"].each do |str|
+      ["-", "=", "[", "]", "\\", ";", "'", "`", ",", ".", "/", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", "\"", "~", "<", ">", "?"].each do |str|
         char = str[0]
         layout.char_to_hid[char].should_not be_nil
       end

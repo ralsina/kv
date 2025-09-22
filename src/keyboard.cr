@@ -6,7 +6,7 @@ module HIDKeyboard
   Log = ::Log.for(self)
 
   # Current keyboard layout
-  @@layout : KeyboardLayouts::Layout = KeyboardLayouts::QWERTY
+  @@layout : KeyboardLayouts::Layout = KeyboardLayouts.get_layout("us")
 
   # Get current layout
   def self.layout
