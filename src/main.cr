@@ -9,6 +9,7 @@ require "baked_file_handler"
 require "kemal-basic-auth"
 require "./anti_idle"
 require "./hardware_detector"
+require "./keyboard"
 
 module Main
   VERSION = {{ `shards version #{__DIR__}/../`.chomp.stringify }}
@@ -48,16 +49,17 @@ module Main
       Options:
         -d DEVICE, --device=DEVICE         Video device [default: auto-detect]
         -a DEVICE, --audio-device=DEVICE   Audio device [default: hw:1,0]
-        -r RESOLUTION, --resolution=RESOLUTION  Video resolution WIDTHxHEIGHT [default: 1920x1080]
+        -r RES, --resolution=RES           Video resolution WIDTHxHEIGHT [default: 1920x1080]
         -f FPS, --fps=FPS                  Video framerate [default: 30]
         -q QUALITY, --quality=QUALITY      Video JPEG quality (1-100) [default: 100]
         -p PORT, --port=PORT               HTTP server port [default: 3000]
         -b ADDRESS, --bind=ADDRESS         Address to bind to [default: 0.0.0.0]
-        --disable-mouse                   Disable USB mouse gadget
+        --disable-mouse                    Disable USB mouse gadget
         --disable-ethernet                 Disable USB ethernet gadget
         --disable-mass-storage             Disable USB mass storage gadget
         --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
         --hotplug-interval=SECONDS         Video device hotplug polling interval [default: 60]
+        -k LAYOUT, --kbd-layout=LAYOUT     Keyboard layout [default: us]
         -h, --help                         Show this help
 
       Environment Variables:
@@ -66,10 +68,12 @@ module Main
         KV_PASSWORD                        Password for basic authentication
 
       Examples:
-        sudo ./bin/kv                          # Auto-detect video device, 1080p@30fps
+        sudo ./bin/kv                          # Auto-detect video device, 1080p@30fps, US keyboard
         sudo ./bin/kv -r 720p -f 60            # Auto-detect device, HD 720p at 60fps
         sudo ./bin/kv -d /dev/video0 -r 4k     # Specific device, 4K resolution
         sudo ./bin/kv -r 1280x720 -p 8080      # Custom resolution, port 8080
+        sudo ./bin/kv -k fr                    # French AZERTY keyboard layout
+        sudo ./bin/kv -k de -r 1080p           # German QWERTZ keyboard layout
         LOG_LEVEL=debug sudo ./bin/kv          # Enable debug logging
       USAGE
 
@@ -111,6 +115,7 @@ module Main
     port = args["--port"]?.try(&.as(String)) || "3000"
     bind_address = args["--bind"]?.try(&.as(String)) || "0.0.0.0"
     hotplug_interval = args["--hotplug-interval"]?.try(&.as(String)) || "60"
+    keyboard_layout = args["--kbd-layout"]?.try(&.as(String)) || "us"
     auto_detect = video_device.empty? || video_device == "auto-detect"
 
     # Parse resolution
@@ -207,6 +212,20 @@ module Main
     disable_mouse = true if args["--disable-mouse"]
     disable_ethernet = true if args["--disable-ethernet"]
     disable_mass_storage = true if args["--disable-mass-storage"]
+
+    # Set keyboard layout
+    Log.info { "Setting keyboard layout to: #{keyboard_layout}" }
+    HIDKeyboard.layout = keyboard_layout
+
+    # Check if the layout was actually loaded (falls back to QWERTY if not found)
+    if HIDKeyboard.layout.name.downcase != keyboard_layout.downcase &&
+       !["qwerty", "us", "en-us"].includes?(keyboard_layout.downcase)
+      Log.warn { "Unknown keyboard layout '#{keyboard_layout}'. Available layouts:" }
+      KeyboardLayouts.available_layouts.each do |layout|
+        Log.warn { "  - #{layout}" }
+      end
+      Log.warn { "Falling back to #{HIDKeyboard.layout.name}" }
+    end
 
     # Create and set the global KVM manager instance
     kvm_manager = KVMManagerV4cr.new(
