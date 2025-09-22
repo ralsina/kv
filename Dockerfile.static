@@ -31,6 +31,7 @@ RUN rm -rf alsa-lib ogg opus
 RUN git clone https://github.com/alsa-project/alsa-lib.git
 
 WORKDIR /app/alsa-lib
+RUN git checkout v1.2.14
 RUN which libtoolize
 RUN libtoolize --force --copy --automake
 RUN aclocal 
