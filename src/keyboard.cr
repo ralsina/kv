@@ -138,7 +138,48 @@ module HIDKeyboard
     "up"       => 0x52_u8,
     "num-lock" => 0x53_u8,
     "kp-enter" => 0x58_u8,
+    # Keypad keys
+    "kp1" => 0x59_u8,
+    "kp2" => 0x5a_u8,
+    "kp3" => 0x5b_u8,
+    "kp4" => 0x5c_u8,
+    "kp5" => 0x5d_u8,
+    "kp6" => 0x5e_u8,
+    "kp7" => 0x5f_u8,
+    "kp8" => 0x60_u8,
+    "kp9" => 0x61_u8,
+    "kp0" => 0x62_u8,
+    "kp." => 0x63_u8,
+    "kp/" => 0x54_u8,
+    "kp*" => 0x55_u8,
+    "kp-" => 0x56_u8,
+    "kp+" => 0x57_u8,
+    "kp=" => 0x67_u8,
+    "kp," => 0x85_u8,
+    # Non-US keyboard keys
+    "non-us-backslash" => 0x64_u8,
+    "application" => 0x65_u8,
+    "power" => 0x66_u8,
+    "print-screen" => 0x46_u8,
+    "scroll-lock" => 0x47_u8,
+    "pause" => 0x48_u8,
   }
+
+  def self.create_keyboard_report(usages : Array(UInt8), modifiers : Array(String) = [] of String) : Bytes
+    report = Bytes.new(8, 0_u8)
+
+    modifiers.each do |mod|
+      if mod_val = KMOD[mod.downcase]?
+        report[0] |= mod_val
+      end
+    end
+
+    usages.first(6).each_with_index do |usage, index|
+      report[2 + index] = usage
+    end
+
+    report
+  end
 
   def self.create_keyboard_report(keys : Array(String), modifiers : Array(String) = [] of String) : Bytes
     report = Bytes.new(8, 0_u8)
