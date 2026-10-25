@@ -68,8 +68,6 @@ KV therefore supports physical keyboards using both US and Canadian French layou
 
 The remote computer should use the keyboard layout that matches the physical keyboard being emulated (for example, US on the remote machine for a US layout, or Canadian French for a Canadian French layout).
 
-The Flutter client uses the same raw HID-usage protocol.
-
 ## Development
 
 Details to be explained
