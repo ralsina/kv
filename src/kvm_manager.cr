@@ -383,6 +383,20 @@ class KVMManagerV4cr
     @mass_storage
   end
 
+  def send_key_usage(usage : UInt8, modifiers : Array(String) = [] of String)
+    return {success: false, message: "Keyboard not available"} unless @keyboard_enabled
+    return {success: false, message: "No keyboard device"} unless @keyboard_device
+
+    begin
+      report = HIDKeyboard.create_keyboard_report([usage], modifiers)
+      HIDKeyboard.send_keyboard_report(@keyboard_device.to_s, report)
+      {success: true, message: "HID usage sent: 0x#{usage.to_s(16)}"}
+    rescue ex
+      Log.error { "Failed to send HID usage: #{ex.message}" }
+      {success: false, message: "Error sending HID usage: #{ex.message}"}
+    end
+  end
+
   def send_keys(keys : Array(String), modifiers : Array(String) = [] of String)
     # Track keys before sending to prevent duplicates
     keys.each do |key|

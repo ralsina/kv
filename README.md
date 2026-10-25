@@ -60,6 +60,16 @@ You can ignore the black cable, that's monitor output for the SBC and you would 
 
 More details in [docs/handbook.md](docs/handbook.md).
 
+## Keyboard input and layouts
+
+Physical keyboard input is sent as USB HID usage IDs rather than translated characters. This is important for non-US layouts: `KeyboardEvent.key` is layout-dependent, while `KeyboardEvent.code` identifies the physical key position.
+
+KV therefore supports physical keyboards using both US and Canadian French layouts without converting Canadian French characters through the US keymap. Right Alt / AltGr is sent as the HID right-Alt modifier, including Canadian French combinations such as `AltGr+2` for `@`. ISO `Non-US \` is also preserved.
+
+The remote computer should use the keyboard layout that matches the physical keyboard being emulated (for example, US on the remote machine for a US layout, or Canadian French for a Canadian French layout).
+
+The Flutter client uses the same raw HID-usage protocol.
+
 ## Development
 
 Details to be explained

@@ -201,77 +201,45 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                           autofocus: true,
                           onKeyEvent: (KeyEvent event) {
                             if (_sidebarOpen) return;
-                            if (event is KeyDownEvent || event is KeyRepeatEvent) {
-                              if (event.logicalKey == LogicalKeyboardKey.capsLock && event is KeyDownEvent) {
-                                setState(() {
-                                  _capsLockOn = !_capsLockOn;
-                                });
-                                return;
-                              }
-                              final List<String> modifiers = [];
-                              if (HardwareKeyboard.instance.isControlPressed) modifiers.add('ctrl');
-                              if (HardwareKeyboard.instance.isShiftPressed) modifiers.add('shift');
-                              if (HardwareKeyboard.instance.isAltPressed) modifiers.add('alt');
-                              bool isMeta = false;
-                              if (HardwareKeyboard.instance.isMetaPressed) {
-                                isMeta = true;
-                              } else {
-                                final metaKeys = [
-                                  LogicalKeyboardKey.meta,
-                                  LogicalKeyboardKey.metaLeft,
-                                  LogicalKeyboardKey.metaRight,
-                                  LogicalKeyboardKey.superKey,
-                                ];
-                                for (final k in metaKeys) {
-                                  if (HardwareKeyboard.instance.logicalKeysPressed.contains(k)) {
-                                    isMeta = true;
-                                    break;
-                                  }
-                                }
-                              }
-                              if (isMeta) modifiers.add('meta');
-                              if (HardwareKeyboard.instance.isControlPressed && HardwareKeyboard.instance.isAltPressed && HardwareKeyboard.instance.isShiftPressed) {
-                                _releaseMouse();
-                                setState(() {});
-                                return;
-                              }
-                              String key = event.logicalKey.keyLabel.isNotEmpty
-                                  ? event.logicalKey.keyLabel
-                                  : event.logicalKey.debugName ?? event.runtimeType.toString();
-                              key = key.toLowerCase();
-                              if (key == ' ') {
-                                key = 'space';
-                              }
-                              const arrowMap = {
-                                'arrow left': 'left',
-                                'arrow right': 'right',
-                                'arrow up': 'up',
-                                'arrow down': 'down',
+                            if (event is! KeyDownEvent && event is! KeyRepeatEvent) return;
+
+                            final usage = event.physicalKey.usbHidUsage;
+                            if (usage == 0) return;
+
+                            final List<String> modifiers = [];
+                            final physicalKeys = HardwareKeyboard.instance.physicalKeysPressed;
+                            final altGr = physicalKeys.contains(PhysicalKeyboardKey.altRight);
+                            if (HardwareKeyboard.instance.isControlPressed && !altGr) {
+                              modifiers.add('ctrl');
+                            }
+                            if (HardwareKeyboard.instance.isShiftPressed) {
+                              modifiers.add('shift');
+                            }
+                            if (altGr) {
+                              modifiers.add('right-alt');
+                            } else if (HardwareKeyboard.instance.isAltPressed) {
+                              modifiers.add(physicalKeys.contains(PhysicalKeyboardKey.altRight) ? 'right-alt' : 'left-alt');
+                            }
+                            if (HardwareKeyboard.instance.isMetaPressed) {
+                              modifiers.add(physicalKeys.contains(PhysicalKeyboardKey.metaRight) ? 'right-meta' : 'left-meta');
+                            }
+
+                            if (HardwareKeyboard.instance.isControlPressed &&
+                                HardwareKeyboard.instance.isAltPressed &&
+                                HardwareKeyboard.instance.isShiftPressed) {
+                              _releaseMouse();
+                              setState(() {});
+                              return;
+                            }
+
+                            setState(() {});
+                            if (_wsOpen) {
+                              final msg = <String, dynamic>{
+                                'type': 'key_usage',
+                                'usage': usage,
+                                'modifiers': modifiers,
                               };
-                              if (arrowMap.containsKey(key)) {
-                                key = arrowMap[key]!;
-                              }
-                              bool isCapsLockOn = _capsLockOn;
-                              bool isShift = modifiers.contains('shift');
-                              if (key.length == 1 && key.codeUnitAt(0) >= 97 && key.codeUnitAt(0) <= 122) {
-                                if (isCapsLockOn != isShift) {
-                                  key = key.toUpperCase();
-                                }
-                              }
-                              const modifierKeys = [
-                                'shift', 'ctrl', 'control', 'alt', 'meta', 'super', 'windows', 'command', 'option'
-                              ];
-                              if (!modifierKeys.contains(key)) {
-                                setState(() {});
-                                if (_wsOpen) {
-                                  final msg = <String, dynamic>{
-                                    'type': 'key_combination',
-                                    'keys': [key],
-                                    'modifiers': modifiers,
-                                  };
-                                  _sendWsMessage(msg);
-                                }
-                              }
+                              _sendWsMessage(msg);
                             }
                           },
                           child: Mjpeg(

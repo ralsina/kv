@@ -189,6 +189,7 @@ window.setupInputWebSocket = function () {
 // --- Input Event Senders ---
 window.sendKey = (key) => window.wsSendInput({ type: 'key_press', key })
 window.sendCombination = (modifiers, keys) => window.wsSendInput({ type: 'key_combination', modifiers, keys })
+window.sendHidUsage = (modifiers, usage) => window.wsSendInput({ type: 'key_usage', modifiers, usage })
 window.sendMouseClick = (button) => window.wsSendInput({ type: 'mouse_click', button })
 window.sendMousePress = (button) => window.wsSendInput({ type: 'mouse_press', button })
 window.sendMouseRelease = (button) => window.wsSendInput({ type: 'mouse_release', button })
@@ -201,25 +202,15 @@ window.sendText = (text) => {
 
 // --- Keyboard Helpers ---
 window.keyEventToHIDKey = function (event) {
+  // Keep this helper for virtual/legacy key buttons. Physical keyboards use
+  // event.code -> USB HID usage in sendPhysicalKey below.
   const key = event.key
   const keyMap = {
-    Enter: 'enter',
-    Escape: 'escape',
-    Backspace: 'backspace',
-    Tab: 'tab',
-    Delete: 'delete',
-    ArrowUp: 'up',
-    ArrowDown: 'down',
-    ArrowLeft: 'left',
-    ArrowRight: 'right',
-    Home: 'home',
-    End: 'end',
-    PageUp: 'pageup',
-    PageDown: 'pagedown',
-    Insert: 'insert',
-    CapsLock: 'caps-lock',
-    NumLock: 'num-lock',
-    ' ': 'space'
+    Enter: 'enter', Escape: 'escape', Backspace: 'backspace', Tab: 'tab',
+    Delete: 'delete', Insert: 'insert', Home: 'home', End: 'end',
+    PageUp: 'pageup', PageDown: 'pagedown', ArrowUp: 'up', ArrowDown: 'down',
+    ArrowLeft: 'left', ArrowRight: 'right', CapsLock: 'caps-lock',
+    NumLock: 'num-lock', ' ': 'space'
   }
   if (key.startsWith('F') && key.length > 1 && !isNaN(key.substring(1))) return key.toLowerCase()
   if (keyMap[key]) return keyMap[key]
@@ -227,12 +218,62 @@ window.keyEventToHIDKey = function (event) {
   return null
 }
 
+// USB HID Usage IDs for Keyboard/Keypad Page (0x07). KeyboardEvent.code is
+// deliberately used instead of KeyboardEvent.key: code identifies the
+// physical key and is therefore independent of whether the local keyboard is
+// US, Canadian French, etc.
+window.keyEventToHIDUsage = function (event) {
+  if (event.code && /^Key[A-Z]$/.test(event.code)) return 0x04 + event.code.charCodeAt(3) - 65
+  if (event.code && /^Digit[1-9]$/.test(event.code)) return 0x1d + Number(event.code.substring(5))
+  if (event.code === 'Digit0') return 0x27
+
+  const usages = {
+    Escape: 0x29, Backspace: 0x2a, Tab: 0x2b, Enter: 0x28, Space: 0x2c,
+    Minus: 0x2d, Equal: 0x2e, BracketLeft: 0x2f, BracketRight: 0x30,
+    Backslash: 0x31, Semicolon: 0x33, Quote: 0x34, Backquote: 0x35,
+    Comma: 0x36, Period: 0x37, Slash: 0x38, CapsLock: 0x39,
+    F1: 0x3a, F2: 0x3b, F3: 0x3c, F4: 0x3d, F5: 0x3e, F6: 0x3f,
+    F7: 0x40, F8: 0x41, F9: 0x42, F10: 0x43, F11: 0x44, F12: 0x45,
+    PrintScreen: 0x46, ScrollLock: 0x47, Pause: 0x48, Insert: 0x49,
+    Home: 0x4a, PageUp: 0x4b, Delete: 0x4c, End: 0x4d, PageDown: 0x4e,
+    ArrowRight: 0x4f, ArrowLeft: 0x50, ArrowDown: 0x51, ArrowUp: 0x52,
+    NumLock: 0x53, NumpadDivide: 0x54, NumpadMultiply: 0x55,
+    NumpadSubtract: 0x56, NumpadAdd: 0x57, NumpadEnter: 0x58,
+    Numpad1: 0x59, Numpad2: 0x5a, Numpad3: 0x5b, Numpad4: 0x5c,
+    Numpad5: 0x5d, Numpad6: 0x5e, Numpad7: 0x5f, Numpad8: 0x60,
+    Numpad9: 0x61, Numpad0: 0x62, NumpadDecimal: 0x63,
+    IntlBackslash: 0x64, ContextMenu: 0x65
+  }
+  if (usages[event.code]) return usages[event.code]
+  if (event.code === 'ShiftLeft') return 0xe1
+  if (event.code === 'ShiftRight') return 0xe5
+  if (event.code === 'ControlLeft') return 0xe0
+  if (event.code === 'ControlRight') return 0xe4
+  if (event.code === 'AltLeft') return 0xe2
+  if (event.code === 'AltRight') return 0xe6
+  if (event.code === 'MetaLeft') return 0xe3
+  if (event.code === 'MetaRight') return 0xe7
+  return null
+}
+
+window.sendPhysicalKey = function (event) {
+  const usage = keyEventToHIDUsage(event)
+  if (usage == null) return false
+  event.preventDefault()
+  sendHidUsage(getModifiers(event), usage)
+  return true
+}
 window.getModifiers = function (event) {
   const modifiers = []
-  if (event.ctrlKey) modifiers.push('ctrl')
+  const altGraph = typeof event.getModifierState === 'function' && event.getModifierState('AltGraph')
+  if (event.ctrlKey && !altGraph) modifiers.push('ctrl')
   if (event.shiftKey) modifiers.push('shift')
-  if (event.altKey) modifiers.push('alt')
-  if (event.metaKey) modifiers.push('meta')
+  if (altGraph) {
+    modifiers.push('right-alt')
+  } else if (event.altKey) {
+    modifiers.push(event.code === 'AltRight' ? 'right-alt' : 'left-alt')
+  }
+  if (event.metaKey) modifiers.push(event.code === 'MetaRight' ? 'right-meta' : 'left-meta')
   return modifiers
 }
 
