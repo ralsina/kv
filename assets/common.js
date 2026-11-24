@@ -519,13 +519,18 @@ window.showVideoQualityMenu = () => {
 }
 
 // --- Latency Measurement ---
-window.measureLatency = () => window.apiFetch('/api/latency-test', {}, (data) => {
-  if (data.timestamp) {
-    const latency = Date.now() - data.timestamp
-    const indicator = document.getElementById('latency-indicator')
-    if (indicator) indicator.innerHTML = `<span class="material-icons">speed</span> ${latency}ms`
-  }
-})
+window.measureLatency = () => {
+  const start = Date.now()
+  window.apiFetch('/api/latency-test', {}, (data) => {
+    if (data.timestamp) {
+      // Round-trip time measured with the client clock only, so it is
+      // independent of any clock skew between the browser and the server.
+      const latency = Date.now() - start
+      const indicator = document.getElementById('latency-indicator')
+      if (indicator) indicator.innerHTML = `<span class="material-icons">speed</span> ${latency}ms`
+    }
+  })
+}
 
 // --- Initial Setup ---
 document.addEventListener('DOMContentLoaded', () => {
