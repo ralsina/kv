@@ -58,6 +58,10 @@ module Main
         --disable-mass-storage             Disable USB mass storage gadget
         --anti-idle                        Enable anti-idle mouse jiggler every 60 seconds
         --hotplug-interval=SECONDS         Video device hotplug polling interval [default: 60]
+        --ch9329-device=DEVICE             Use a CH9329 UART-to-USB-HID bridge
+        --ch9329-baud=BAUD                 CH9329 UART baud rate [default: 9600]
+        --ch9329-kvm-input-key-sequence=SEQ  KVM input switch key sequence; "#" is the input slot
+        --ch9329-kvm-input-count=COUNT       Number of KVM inputs to expose in the UI
         -h, --help                         Show this help
 
       Environment Variables:
@@ -111,6 +115,10 @@ module Main
     port = args["--port"]?.try(&.as(String)) || "3000"
     bind_address = args["--bind"]?.try(&.as(String)) || "0.0.0.0"
     hotplug_interval = args["--hotplug-interval"]?.try(&.as(String)) || "60"
+    ch9329_device = args["--ch9329-device"]?.try(&.as(String)) || ""
+    ch9329_baud = args["--ch9329-baud"]?.try(&.as(String)) || "9600"
+    ch9329_key_sequence = args["--ch9329-kvm-input-key-sequence"]?.try(&.as(String)) || ""
+    ch9329_input_count = args["--ch9329-kvm-input-count"]?.try(&.as(String)) || "0"
     auto_detect = video_device.empty? || video_device == "auto-detect"
 
     # Parse resolution
@@ -160,6 +168,16 @@ module Main
 
     # Parse hotplug interval
     hotplug_interval = hotplug_interval.to_i
+    ch9329_baud = ch9329_baud.to_i
+    if ch9329_baud <= 0
+      Log.error { "Invalid CH9329 baud rate" }
+      exit 1
+    end
+    ch9329_input_count = ch9329_input_count.to_i
+    if ch9329_input_count < 0
+      Log.error { "Invalid CH9329 KVM input count" }
+      exit 1
+    end
     if hotplug_interval < 0
       Log.error { "Invalid hotplug interval. Must be 0 or positive" }
       exit 1
@@ -193,8 +211,10 @@ module Main
     # If no video is available initially but hotplug is enabled, we'll poll
     enable_hotplug = !video_available && hotplug_interval > 0
 
-    # If neither video nor OTG is available and hotplug is disabled, exit
-    if !video_available && !otg_supported && !enable_hotplug
+    ch9329_available = !ch9329_device.empty? && File.exists?(ch9329_device)
+
+    # If neither video nor HID backend is available and hotplug is disabled, exit
+    if !video_available && !otg_supported && !ch9329_available && !enable_hotplug
       Log.error { "❌ Neither video input nor USB OTG is available. Cannot start KVM service." }
       Log.error { "   Use --hotplug-interval > 0 to enable video device hotplug polling" }
       exit 1
@@ -220,7 +240,11 @@ module Main
       disable_mouse: disable_mouse,
       disable_ethernet: disable_ethernet,
       disable_mass_storage: disable_mass_storage,
-      hotplug_interval: hotplug_interval.seconds
+      hotplug_interval: hotplug_interval.seconds,
+      ch9329_device: ch9329_device,
+      ch9329_baud: ch9329_baud,
+      ch9329_key_sequence: ch9329_key_sequence,
+      ch9329_input_count: ch9329_input_count
     )
     GlobalKVM.manager = kvm_manager
 
@@ -243,7 +267,7 @@ module Main
 
     Log.info { "" }
     # Print mode-specific information
-    if video_available && otg_supported
+    if video_available && (otg_supported || ch9329_available)
       Log.info { "🖥️  Ultra Low-Latency KVM Server (V4cr) - Full KVM Mode" }
       Log.info { "━" * 50 }
       Log.info { "📹 Video device: #{kvm_manager.video_device}" }
@@ -254,7 +278,7 @@ module Main
       Log.info { "🖱️  HID mouse: #{kvm_manager.mouse_disabled? ? "❌ Disabled by command line" : (kvm_manager.mouse_enabled? ? "✅ Ready" : "❌ Failed to initialize")}" }
       Log.info { "🔌 Ethernet gadget: #{kvm_manager.ethernet_disabled? ? "❌ Disabled by command line" : (kvm_manager.ecm_status[:enabled] ? "✅ Ready" : "❌ Failed to initialize")}" }
       Log.info { "💾 Mass storage gadget: #{kvm_manager.mass_storage_disabled? ? "❌ Disabled by command line" : (kvm_manager.status[:storage][:attached] ? "✅ Ready" : "⏸️ Idle (no image selected)")}" }
-      Log.info { "⚡ Architecture: Direct V4cr MJPEG + USB HID" }
+      Log.info { "⚡ Architecture: Direct V4cr MJPEG + #{ch9329_available ? "CH9329 UART HID" : "USB HID gadget"}" }
       Log.info { "🎯 Target latency: <50ms" }
     elsif video_available && !otg_supported
       Log.info { "🖥️  Ultra Low-Latency KVM Server (V4cr) - Video Streaming Mode" }
@@ -296,7 +320,7 @@ module Main
     Log.info { "with native V4L2 access for minimal latency." }
     Log.info { "" }
 
-    add_handler BakedFileHandler::BakedFileHandler.new(Assets)
+    add_handler BakedFileHandler::BakedFileHandler.new(Assets, cache_control: "no-cache, no-store, must-revalidate")
     # Enable CORS for all origins (allow cross-origin requests) on all responses
     before_all do |env|
       env.response.headers.add("Access-Control-Allow-Origin", "*")

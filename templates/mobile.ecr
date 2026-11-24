@@ -79,6 +79,16 @@
             <button onclick="sendMouseClick('middle')">M Click</button>
           </div>
         </details>
+        <% if GlobalKVM.manager.ch9329_input_count > 0 %>
+        <details id="section-kvm-input">
+          <summary><span class="material-icons">swap_horiz</span> KVM Input</summary>
+          <div>
+            <% (1..GlobalKVM.manager.ch9329_input_count).each do |slot| %>
+            <button onclick="switchInput(<%= slot %>)">Input <%= slot %></button>
+            <% end %>
+          </div>
+        </details>
+        <% end %>
         <details id="section-usb" style="display: none;">
           <summary><span class="material-icons">usb</span> Virtual USB Drive</summary>
           <div id="usb-image-list">

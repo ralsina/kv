@@ -73,6 +73,18 @@
                 </div>
             </details>
 
+            <% if GlobalKVM.manager.ch9329_input_count > 0 %>
+            <details id="section-kvm-input" open><summary><span class="material-icons">swap_horiz</span> KVM Input</summary>
+                <div class="compact-section">
+                    <div class="key-grid">
+                        <% (1..GlobalKVM.manager.ch9329_input_count).each do |slot| %>
+                        <button onclick="switchInput(<%= slot %>)" class="outline">Input <%= slot %></button>
+                        <% end %>
+                    </div>
+                </div>
+            </details>
+            <% end %>
+
             <details id="section-video"><summary><span class="material-icons">videocam</span> Video Controls</summary>
                 <div class="compact-section">
                     <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">

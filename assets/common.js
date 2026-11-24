@@ -199,6 +199,7 @@ window.sendMouseAbsoluteMove = (x, y, buttons = []) => window.wsSendInput({ type
 window.sendText = (text) => {
   if (text) window.wsSendInput({ type: 'text', text })
 }
+window.switchInput = (slot) => window.apiFetch('/api/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot }) })
 
 // --- Keyboard Helpers ---
 window.keyEventToHIDKey = function (event) {

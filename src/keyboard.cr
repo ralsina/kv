@@ -268,6 +268,34 @@ module HIDKeyboard
     end
   end
 
+  # Send generated reports through an arbitrary backend. Used by CH9329.
+  def self.send_text_with_sender(text : String, &block : Bytes -> Nil)
+    text.each_char do |char|
+      report = Bytes.new(8, 0_u8)
+      char_str = char.to_s
+
+      if char == ' '
+        report[2] = KVAL["space"]
+      elsif char >= 'a' && char <= 'z'
+        report[2] = (char.ord - 'a'.ord + 0x04).to_u8
+      elsif char >= 'A' && char <= 'Z'
+        report[0] = KMOD["shift"]
+        report[2] = (char.downcase.ord - 'a'.ord + 0x04).to_u8
+      elsif val = KVAL[char_str]?
+        shifted_chars = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", "\"", "~", "<", ">", "?"]
+        report[0] = KMOD["shift"] if shifted_chars.includes?(char_str)
+        report[2] = val
+      else
+        Log.debug { "Skipping unsupported character: '#{char}' (#{char.ord})" }
+        next
+      end
+
+      yield report
+      sleep 0.001.seconds
+      yield Bytes.new(8, 0_u8)
+    end
+  end
+
   def self.send_text(device_path : String, text : String)
     text.each_char do |char|
       # Clear report first (like C code)

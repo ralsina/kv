@@ -23,3 +23,21 @@ describe HIDKeyboard do
     report[2].should eq(0x64_u8)
   end
 end
+
+
+describe CH9329 do
+  it "builds the documented keyboard press frame" do
+    frame = CH9329.build_frame(0x02_u8, Bytes[0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00])
+    frame.hexstring.should eq("57ab000208000004000000000010")
+  end
+
+  it "builds the documented keyboard release frame" do
+    frame = CH9329.build_frame(0x02_u8, Bytes.new(8, 0_u8))
+    frame.hexstring.should eq("57ab00020800000000000000000c")
+  end
+
+  it "builds a relative mouse frame" do
+    frame = CH9329.build_frame(0x05_u8, Bytes[0x01, 0x00, 0x0a, 0x00, 0x00])
+    frame.hexstring.should eq("57ab00050501000a000017")
+  end
+end

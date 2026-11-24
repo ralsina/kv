@@ -1,4 +1,5 @@
 require "./keyboard"
+require "./ch9329"
 require "./mouse"
 require "./composite"
 require "./mass_storage_manager"
@@ -188,12 +189,25 @@ class KVMManagerV4cr
   @audio_streamer : AudioStreamer
   @hotplug_interval : Time::Span
   @hotplug_fiber : Fiber?
+  @ch9329 : CH9329?
+  @ch9329_key_sequence : String
+  @ch9329_input_count : Int32
 
-  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, @video_jpeg_quality = 100, ecm_enabled = false, disable_mouse = false, disable_ethernet = false, disable_mass_storage = false, @hotplug_interval = 60.seconds)
+  def initialize(@video_device = "/dev/video1", @audio_device = "hw:1,0", @width = 640_u32, @height = 480_u32, @fps = 30, @video_jpeg_quality = 100, ecm_enabled = false, disable_mouse = false, disable_ethernet = false, disable_mass_storage = false, @hotplug_interval = 60.seconds, ch9329_device : String = "", ch9329_baud : Int32 = 9600, ch9329_key_sequence : String = "", ch9329_input_count : Int32 = 0)
     @ecm_enabled = ecm_enabled && !disable_ethernet
     @disable_mouse = disable_mouse
     @disable_ethernet = disable_ethernet
     @disable_mass_storage = disable_mass_storage
+    @ch9329_key_sequence = ch9329_key_sequence
+    @ch9329_input_count = ch9329_input_count
+
+    if !ch9329_device.empty?
+      @ch9329 = CH9329.new(ch9329_device, ch9329_baud)
+      @keyboard_device = ch9329_device
+      @keyboard_enabled = true
+      @mouse_enabled = !@disable_mouse
+      Log.info { "Using CH9329 serial HID backend on #{@keyboard_device}" }
+    end
 
     # Initialize video components only if video device is available
     if @video_device.empty? || !File.exists?(@video_device)
@@ -245,8 +259,10 @@ class KVMManagerV4cr
       end
     end
 
-    # Only setup HID devices if we have OTG support
-    if HardwareDetector.otg_hardware_available?
+    # Only setup USB gadget HID devices when a CH9329 serial backend is not active
+    if @ch9329
+      Log.info { "USB gadget HID setup skipped because CH9329 is active" }
+    elsif HardwareDetector.otg_hardware_available?
       setup_hid_devices
     else
       Log.warn { "USB OTG hardware not available - HID devices disabled" }
@@ -389,7 +405,7 @@ class KVMManagerV4cr
 
     begin
       report = HIDKeyboard.create_keyboard_report([usage], modifiers)
-      HIDKeyboard.send_keyboard_report(@keyboard_device.to_s, report)
+      send_keyboard_report(report)
       {success: true, message: "HID usage sent: 0x#{usage.to_s(16)}"}
     rescue ex
       Log.error { "Failed to send HID usage: #{ex.message}" }
@@ -412,7 +428,7 @@ class KVMManagerV4cr
     return {success: false, message: "No valid keys to send"} if active_keys.empty?
 
     report = HIDKeyboard.create_keyboard_report(active_keys, modifiers)
-    HIDKeyboard.send_keyboard_report(@keyboard_device.to_s, report)
+    send_keyboard_report(report)
 
     # Remove keys from pressed state after successful send
     active_keys.each { |key| @pressed_keys.delete(key) }
@@ -431,7 +447,11 @@ class KVMManagerV4cr
 
     begin
       Log.debug { "Sending text: '#{text}'" }
-      HIDKeyboard.send_text(@keyboard_device, text)
+      if @ch9329
+        HIDKeyboard.send_text_with_sender(text) { |report| @ch9329.not_nil!.keyboard_report(report) }
+      else
+        HIDKeyboard.send_text(@keyboard_device, text)
+      end
       {success: true, message: "Text sent: #{text}"}
     rescue ex
       Log.error { "Failed to send text: #{ex.message}" }
@@ -449,7 +469,7 @@ class KVMManagerV4cr
 
       # Send empty report to release all keys
       empty_report = Bytes.new(8, 0_u8)
-      HIDKeyboard.send_keyboard_report(@keyboard_device, empty_report)
+      send_keyboard_report(empty_report)
 
       # Clear pressed keys state
       released_keys = @pressed_keys.size
@@ -460,8 +480,8 @@ class KVMManagerV4cr
         Log.info { "Releasing stuck mouse buttons (#{@pressed_buttons.size} buttons)" }
         @pressed_buttons.clear
         # Send empty mouse report
-        if mouse_device = @mouse_device
-          HIDMouse.send_mouse_move_with_buttons(mouse_device, 0, 0, [] of String)
+        if @ch9329 || @mouse_device
+          send_mouse_report(HIDMouse.create_mouse_report([] of String))
         end
       end
 
@@ -474,15 +494,11 @@ class KVMManagerV4cr
 
   def send_mouse_click(button : String)
     return {success: false, message: "Mouse not available"} unless @mouse_enabled
-    return {success: false, message: "No mouse device"} unless @mouse_device
+    return {success: false, message: "No mouse device"} unless @mouse_device || @ch9329
 
     begin
-      if mouse_device = @mouse_device
-        HIDMouse.send_mouse_click(mouse_device, button)
-        {success: true, message: "Mouse click sent: #{button}"}
-      else
-        {success: false, message: "Mouse device not available"}
-      end
+      send_mouse_click_report(button)
+      {success: true, message: "Mouse click sent: #{button}"}
     rescue ex
       Log.error { "Failed to send mouse click: #{ex.message}" }
       {success: false, message: "Error sending mouse click: #{ex.message}"}
@@ -491,16 +507,12 @@ class KVMManagerV4cr
 
   def send_mouse_move(x : Int32, y : Int32)
     return {success: false, message: "Mouse not available"} unless @mouse_enabled
-    return {success: false, message: "No mouse device"} unless @mouse_device
+    return {success: false, message: "No mouse device"} unless @mouse_device || @ch9329
 
     begin
       # Send movement with current button state preserved
-      if mouse_device = @mouse_device
-        HIDMouse.send_mouse_move_with_buttons(mouse_device, x, y, @pressed_buttons.to_a)
-        {success: true, message: "Mouse move sent: #{x}, #{y} with buttons: #{@pressed_buttons.to_a}"}
-      else
-        {success: false, message: "Mouse device not available"}
-      end
+      send_mouse_move_report(x, y, @pressed_buttons.to_a)
+      {success: true, message: "Mouse move sent: #{x}, #{y} with buttons: #{@pressed_buttons.to_a}"}
     rescue ex
       Log.error { "Failed to send mouse move: #{ex.message}" }
       {success: false, message: "Error sending mouse move: #{ex.message}"}
@@ -509,16 +521,12 @@ class KVMManagerV4cr
 
   def send_mouse_press(button : String)
     return {success: false, message: "Mouse not available"} unless @mouse_enabled
-    return {success: false, message: "No mouse device"} unless @mouse_device
+    return {success: false, message: "No mouse device"} unless @mouse_device || @ch9329
 
     begin
       @pressed_buttons.add(button) # Track pressed button
-      if mouse_device = @mouse_device
-        HIDMouse.send_mouse_press(mouse_device, button)
-        {success: true, message: "Mouse press sent: #{button}"}
-      else
-        {success: false, message: "Mouse device not available"}
-      end
+      send_mouse_press_report(button)
+      {success: true, message: "Mouse press sent: #{button}"}
     rescue ex
       Log.error { "Failed to send mouse press: #{ex.message}" }
       {success: false, message: "Error sending mouse press: #{ex.message}"}
@@ -527,16 +535,12 @@ class KVMManagerV4cr
 
   def send_mouse_release(button : String)
     return {success: false, message: "Mouse not available"} unless @mouse_enabled
-    return {success: false, message: "No mouse device"} unless @mouse_device
+    return {success: false, message: "No mouse device"} unless @mouse_device || @ch9329
 
     begin
       @pressed_buttons.delete(button) # Remove from pressed buttons
-      if mouse_device = @mouse_device
-        HIDMouse.send_mouse_release(mouse_device, button)
-        {success: true, message: "Mouse release sent: #{button}"}
-      else
-        {success: false, message: "Mouse device not available"}
-      end
+      send_mouse_release_report(button)
+      {success: true, message: "Mouse release sent: #{button}"}
     rescue ex
       Log.error { "Failed to send mouse release: #{ex.message}" }
       {success: false, message: "Error sending mouse release: #{ex.message}"}
@@ -545,15 +549,11 @@ class KVMManagerV4cr
 
   def send_mouse_wheel(wheel_delta : Int32)
     return {success: false, message: "Mouse not available"} unless @mouse_enabled
-    return {success: false, message: "No mouse device"} unless @mouse_device
+    return {success: false, message: "No mouse device"} unless @mouse_device || @ch9329
 
     begin
-      if mouse_device = @mouse_device
-        HIDMouse.send_mouse_wheel(mouse_device, wheel_delta)
-        {success: true, message: "Mouse wheel sent: #{wheel_delta}"}
-      else
-        {success: false, message: "Mouse device not available"}
-      end
+      send_mouse_wheel_report(wheel_delta)
+      {success: true, message: "Mouse wheel sent: #{wheel_delta}"}
     rescue ex
       Log.error { "Failed to send mouse wheel: #{ex.message}" }
       {success: false, message: "Error sending mouse wheel: #{ex.message}"}
@@ -562,16 +562,12 @@ class KVMManagerV4cr
 
   def send_mouse_move_with_buttons(x : Int32, y : Int32, buttons : Array(String))
     return {success: false, message: "Mouse not available"} unless @mouse_enabled
-    return {success: false, message: "No mouse device"} unless @mouse_device
+    return {success: false, message: "No mouse device"} unless @mouse_device || @ch9329
 
     begin
       # Send movement with explicit button state (used for drag operations)
-      if mouse_device = @mouse_device
-        HIDMouse.send_mouse_move_with_buttons(mouse_device, x, y, buttons)
-        {success: true, message: "Mouse move sent: #{x}, #{y} with explicit buttons: #{buttons}"}
-      else
-        {success: false, message: "Mouse device not available"}
-      end
+      send_mouse_move_report(x, y, buttons)
+      {success: true, message: "Mouse move sent: #{x}, #{y} with explicit buttons: #{buttons}"}
     rescue ex
       Log.error { "Failed to send mouse move with buttons: #{ex.message}" }
       {success: false, message: "Error sending mouse move with buttons: #{ex.message}"}
@@ -580,9 +576,9 @@ class KVMManagerV4cr
 
   # Send absolute mouse move (for absolute pointer device)
   def send_mouse_absolute_move(x : Int32, y : Int32, buttons : Array(String) = [] of String)
-    if mouse_device_absolute = @mouse_device_absolute
+    if @ch9329 || @mouse_device_absolute
       begin
-        HIDMouse.send_mouse_absolute_move(mouse_device_absolute, x, y, buttons)
+        send_mouse_absolute_report(x, y, buttons)
         {success: true, message: "Absolute mouse move sent: #{x}, #{y} with buttons: #{buttons}"}
       rescue ex
         Log.error { "Failed to send absolute mouse move: #{ex.message}" }
@@ -591,6 +587,93 @@ class KVMManagerV4cr
     else
       {success: false, message: "Absolute mouse not available"}
     end
+  end
+
+  # Report-level dispatch to the active HID backend (CH9329 serial or USB gadget).
+  # A keyboard report is sent as a full press + release keystroke.
+  private def send_keyboard_report(report : Bytes)
+    if ch9329 = @ch9329
+      ch9329.keyboard_report(report)
+      sleep 0.001.seconds
+      ch9329.keyboard_report(Bytes.new(8, 0_u8))
+    else
+      HIDKeyboard.send_keyboard_report(@keyboard_device, report)
+    end
+  end
+
+  private def send_mouse_report(report : Bytes)
+    if ch9329 = @ch9329
+      ch9329.mouse_report(report)
+    elsif mouse_device = @mouse_device
+      HIDMouse.send_mouse_report(mouse_device, report)
+    end
+  end
+
+  private def send_mouse_click_report(button : String)
+    send_mouse_report(HIDMouse.create_mouse_report([button]))
+    sleep 0.001.seconds
+    send_mouse_report(HIDMouse.create_mouse_report([] of String))
+  end
+
+  private def send_mouse_move_report(x : Int32, y : Int32, buttons : Array(String))
+    send_mouse_report(HIDMouse.create_mouse_report(buttons, x, y))
+  end
+
+  private def send_mouse_press_report(button : String)
+    send_mouse_report(HIDMouse.create_mouse_report([button]))
+  end
+
+  private def send_mouse_release_report(button : String)
+    send_mouse_report(HIDMouse.create_mouse_report([] of String))
+  end
+
+  private def send_mouse_wheel_report(wheel_delta : Int32)
+    send_mouse_report(HIDMouse.create_mouse_report([] of String, 0, 0, wheel_delta))
+  end
+
+  private def send_mouse_absolute_report(x : Int32, y : Int32, buttons : Array(String))
+    report = HIDMouse.create_mouse_absolute_report(buttons, x, y)
+    if ch9329 = @ch9329
+      ch9329.mouse_absolute_report(report)
+    elsif mouse_device = @mouse_device_absolute
+      HIDMouse.send_mouse_absolute_report(mouse_device, report)
+    end
+  end
+
+  # Send a single keystroke (press + release). Handles both modifier-only keys
+  # (ctrl, shift, alt, meta, ...) and regular key values (digits, letters, ...).
+  private def send_keystroke(key : String)
+    key = key.strip
+    lowered = key.downcase
+    if HIDKeyboard::KMOD.has_key?(lowered)
+      report = HIDKeyboard.create_keyboard_report([] of UInt8, [lowered])
+    else
+      report = HIDKeyboard.create_keyboard_report([key])
+    end
+    send_keyboard_report(report)
+  end
+
+  # Send the configured KVM input switch key sequence (e.g. ctrl+ctrl+#)
+  # with the "digit" token replaced by the requested slot number. Each token
+  # is sent as an independent press + release keystroke.
+  def switch_kvm_input(slot : Int32)
+    return {success: false, message: "Keyboard not available"} unless @keyboard_enabled
+    return {success: false, message: "No keyboard device"} unless @keyboard_device
+
+    keys = @ch9329_key_sequence.split("+").map do |part|
+      part = part.strip
+      part.downcase == "#" ? slot.to_s : part
+    end.reject { |key| key.blank? }
+
+    return {success: false, message: "Empty KVM input key sequence"} if keys.empty?
+
+    keys.each { |key| send_keystroke(key) }
+
+    {success: true, message: "Sent KVM input sequence for slot #{slot}: #{keys.join("+")}"}
+  end
+
+  def ch9329_input_count
+    @ch9329_input_count
   end
 
   def video_device
@@ -652,11 +735,13 @@ class KVMManagerV4cr
     keyboard_status = {
       enabled: @keyboard_enabled,
       device:  @keyboard_device,
+      backend: @ch9329 ? "ch9329" : "usb-gadget",
     }
 
     mouse_status = {
       enabled:         @mouse_enabled,
       device:          @mouse_device,
+      backend:         @ch9329 ? "ch9329" : "usb-gadget",
       device_absolute: @mouse_device_absolute,
     }
 
@@ -694,6 +779,7 @@ class KVMManagerV4cr
     stop_video_stream
     stop_audio_stream
     @mass_storage.try(&.cleanup)
+    @ch9329.try(&.close)
     HIDComposite.cleanup_all_gadgets
     Log.info { "KVM shutdown cleanup complete." }
   end
