@@ -142,6 +142,15 @@ ws "/ws/input" do |socket|
           result = manager.send_keys([key])
           handle_result.call(result)
         end
+      when "key_usage"
+        usage = data["usage"]?.try(&.as_i)
+        if usage && usage >= 0 && usage <= 0xff
+          modifiers = data["modifiers"]?.try(&.as_a.map(&.as_s)) || [] of String
+          result = manager.send_key_usage(usage.to_u8, modifiers)
+          handle_result.call(result)
+        else
+          send_error.call("Invalid HID keyboard usage")
+        end
       when "key_combination"
         modifiers = data["modifiers"]?.try(&.as_a.map(&.as_s)) || [] of String
         keys = data["keys"]?.try(&.as_a.map(&.as_s)) || [] of String

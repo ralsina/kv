@@ -7,21 +7,8 @@
     "background_color": "#121214",
     "theme_color": "#121214",
     "icons": [
-        }
-    ],
-    "permissions": [
-        "keyboard",
-        "pointer",
-        "clipboard-read",
-        "clipboard-write",
-        "display-capture",
-        "window-management"
-    ],
-    "optional_permissions": [
-        "hid",
-        "usb",
-        "bluetooth"
-    ]
+        {
+            "src": "/icons/icon-192x192.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any"

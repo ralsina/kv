@@ -1,5 +1,5 @@
 /* global document, window, localStorage, navigator, Audio */
-/* global setupInputWebSocket, updateStatus, refreshUsbImages, measureLatency, takeScreenshot, toggleFullscreen, pasteFromClipboard, sendCombination, sendMousePress, sendMouseRelease, sendMouseMove, keyEventToHIDKey, getModifiers, sendMouseWheel */
+/* global setupInputWebSocket, updateStatus, refreshUsbImages, measureLatency, takeScreenshot, toggleFullscreen, pasteFromClipboard, sendCombination, sendMousePress, sendMouseRelease, sendMouseMove, keyEventToHIDKey, keyEventToHIDUsage, sendPhysicalKey, getModifiers, sendMouseWheel */
 
 // --- Desktop-Specific Initializations ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -73,11 +73,7 @@ function setupDesktopVideoStream (videoElementId) {
   // Keyboard events are handled globally when pointer is locked
   document.addEventListener('keydown', (e) => {
     if (document.pointerLockElement === video) {
-      const hidKey = keyEventToHIDKey(e)
-      if (hidKey) {
-        e.preventDefault()
-        sendCombination(getModifiers(e), [hidKey])
-      }
+      sendPhysicalKey(e)
     }
   })
 }
